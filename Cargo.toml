@@ -1,0 +1,26 @@
+[package]
+name = "castep-model-core"
+description = "The core module to parse, read, edit, and write 3D lattice models for castep and compatible with Materials Studio."
+readme = "README.md"
+homepage = "https://github.com/TonyWu20/castep-model-core"
+repository = "https://github.com/TonyWu20/castep-model-core"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+keywords = [
+    "chemistry",
+    "CASTEP",
+    "computational_chem",
+    "linear_algebra",
+    "model_generator",
+]
+
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+nalgebra = {version="0.*", features=["debug", "compare", "rand","macros", "alloc", "arbitrary"]}
+castep-periodic-table = "0.1.*"
+nom = "7"
+rayon = "1.*"
+glob = "0"
