@@ -11,3 +11,21 @@ The crate now supports writing to:
 2. `.msi`
 
 Generic programming is leveraged to handle the interactions and conversions between different formats.
+
+## Features
+
+1. I/O of existing `.msi` format model files. However the format for atom parsing is strict for the moment.
+2. Edit atoms and lattice information in the model.
+    1. Edit the element information, atom ID, xyz coordinates of target atom.
+    2. Read/Write the lattice vectors.
+3. Geometry transformation of the model:
+    1. Translation to desired positions
+    2. Rotate by axis-angle definition.
+4. Export the seedfiles for `CASTEP` task, including:
+    - `*.cell` - necessary file for `CASTEP` task. Can be visualized in many simple and lightweight model viewing software. E.g. `VESTA`.
+    - `*.trjaux`, `*.kptaux`
+    - `*.param`
+    - `*.msi` - can be visualized in `Materials Studio`.
+    - Copy potential files used for `CASTEP` standalone mode. (Potential files are not provided and included in this repository and library)
+    - Miscellaneous files.
+    - Auto-generation of a `perl` script to instruct the `Materials Studio` to generate `.xsd` from `.msi`.
