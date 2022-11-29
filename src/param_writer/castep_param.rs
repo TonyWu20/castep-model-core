@@ -116,8 +116,7 @@ geom_disp_tol :        {:18.15}
 geom_max_iter :     {}
 geom_method : {}
 fixed_npw : {}
-popn_bond_cutoff :        {:18.15}
-"#,
+popn_bond_cutoff :        {:18.15}"#,
             self.geom_energy_tol,
             self.geom_force_tol,
             self.geom_stress_tol,

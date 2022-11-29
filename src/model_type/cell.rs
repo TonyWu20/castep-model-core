@@ -74,7 +74,7 @@ where
             .lattice_vectors()
             .unwrap()
             .vectors()
-            .column(0);
+            .column(1);
         let b_to_x_angle = b_vec.angle(&y_axis);
         if b_to_x_angle != 0.0 {
             let rot_axis = b_vec.cross(&y_axis).normalize();
