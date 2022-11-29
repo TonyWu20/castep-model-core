@@ -68,17 +68,19 @@ where
     T: AsRef<LatticeModel<MsiModel>> + AsMut<LatticeModel<MsiModel>>,
 {
     fn from(mut msi_model: T) -> Self {
-        let x_axis: Vector3<f64> = Vector::x();
-        let a_vec = msi_model
+        let y_axis: Vector3<f64> = Vector::y();
+        let b_vec = msi_model
             .as_ref()
             .lattice_vectors()
             .unwrap()
             .vectors()
             .column(0);
-        let a_to_x_angle = a_vec.angle(&x_axis);
-        let rot_axis = a_vec.cross(&x_axis).normalize();
-        let rot_quatd: UnitQuaternion<f64> = UnitQuaternion::new(rot_axis * a_to_x_angle);
-        msi_model.as_mut().rotate(&rot_quatd);
+        let b_to_x_angle = b_vec.angle(&y_axis);
+        if b_to_x_angle != 0.0 {
+            let rot_axis = b_vec.cross(&y_axis).normalize();
+            let rot_quatd: UnitQuaternion<f64> = UnitQuaternion::new(rot_axis * b_to_x_angle);
+            msi_model.as_mut().rotate(&rot_quatd);
+        }
         let new_lat_vec = LatticeVectors::new(
             msi_model
                 .as_ref()

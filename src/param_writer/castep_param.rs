@@ -1,4 +1,5 @@
 use std::{
+    any::TypeId,
     fmt::{Debug, Display},
     marker::PhantomData,
 };
@@ -56,7 +57,6 @@ pub struct CastepParam<T: Task> {
     popn_calculate: bool,
     calculate_hirshfeld: bool,
     calculate_densdiff: bool,
-    popn_bond_cutoff: f64,
     pdos_calculate_weights: bool,
     extra_setting: T,
 }
@@ -86,6 +86,7 @@ pub struct GeomOptParam {
     geom_max_iter: u32,
     geom_method: String,
     fixed_npw: bool,
+    popn_bond_cutoff: f64,
 }
 
 impl Task for GeomOptParam {}
@@ -100,6 +101,7 @@ impl Default for GeomOptParam {
             geom_max_iter: 6000,
             geom_method: "BFGS".into(),
             fixed_npw: false,
+            popn_bond_cutoff: 3.0,
         }
     }
 }
@@ -113,14 +115,17 @@ geom_stress_tol :        {:18.15}
 geom_disp_tol :        {:18.15}
 geom_max_iter :     {}
 geom_method : {}
-fixed_npw : {}"#,
+fixed_npw : {}
+popn_bond_cutoff :        {:18.15}
+"#,
             self.geom_energy_tol,
             self.geom_force_tol,
             self.geom_stress_tol,
             self.geom_disp_tol,
             self.geom_max_iter,
             self.geom_method,
-            self.fixed_npw
+            self.fixed_npw,
+            self.popn_bond_cutoff
         );
         write!(f, "{}", content)
     }
@@ -165,9 +170,16 @@ bs_write_eigenvalues : {}"#,
 
 impl<T> Default for CastepParam<T>
 where
-    T: Task,
+    T: Task + 'static,
 {
     fn default() -> Self {
+        let task_type_id = TypeId::of::<T>();
+        let (popn_calculate, calculate_hirshfeld) =
+            if task_type_id == TypeId::of::<BandStructureParam>() {
+                (false, false)
+            } else {
+                (true, true)
+            };
         Self {
             xc_functional: "PBE".into(),
             spin_polarized: true,
@@ -194,10 +206,9 @@ where
             num_dump_cycles: 0,
             calculate_elf: false,
             calculate_stress: false,
-            popn_calculate: false,
-            calculate_hirshfeld: true,
+            popn_calculate,
+            calculate_hirshfeld,
             calculate_densdiff: false,
-            popn_bond_cutoff: 3.0,
             pdos_calculate_weights: true,
             extra_setting: T::default(),
         }
@@ -206,11 +217,19 @@ where
 
 impl<T> Display for CastepParam<T>
 where
-    T: Task,
+    T: Task + 'static,
 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let task_type_id = TypeId::of::<T>();
+        let task = if task_type_id == TypeId::of::<GeomOptParam>() {
+            "GeometryOptimization"
+        } else if task_type_id == TypeId::of::<BandStructureParam>() {
+            "BandStructure"
+        } else {
+            panic!("Unsupported task type!")
+        };
         let content = format!(
-            r#"task : GeometryOptimization
+            r#"task : {}
 comment : CASTEP calculation from Materials Studio
 xc_functional : {}
 spin_polarized : {}
@@ -241,9 +260,9 @@ calculate_stress : {}
 popn_calculate : {}
 calculate_hirshfeld : {}
 calculate_densdiff : {}
-popn_bond_cutoff :        {:18.15}
 pdos_calculate_weights : {}
 "#,
+            task,
             self.xc_functional,
             self.spin_polarized,
             self.spin,
@@ -273,7 +292,6 @@ pdos_calculate_weights : {}
             self.popn_calculate,
             self.calculate_hirshfeld,
             self.calculate_densdiff,
-            self.popn_bond_cutoff,
             self.pdos_calculate_weights
         );
         write!(f, "{}", content)
@@ -334,7 +352,7 @@ where
 /// When parameters are all settled, build `CastepParam<T>`
 impl<T> CastepParamBuilder<T, Yes, Yes>
 where
-    T: Task,
+    T: Task + 'static,
 {
     pub fn build(&self) -> CastepParam<T> {
         CastepParam {
