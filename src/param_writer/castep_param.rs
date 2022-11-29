@@ -239,7 +239,7 @@ cut_off_energy :      {:18.15}
 grid_scale :        {:18.15}
 fine_grid_scale :        {:18.15}
 finite_basis_corr :        {}
-elec_energy_tol :   {:18.15}
+elec_energy_tol :   {:18.15e}
 max_scf_cycles :     {}
 fix_occupancy : {}
 metals_method : {}
