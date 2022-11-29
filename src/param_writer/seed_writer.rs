@@ -256,7 +256,7 @@ where
 /// The state of `SeedWriterBuilder<'a, T, P>` ready to build the `SeedWriter<'a,T>`
 impl<'a, T> SeedWriterBuilder<'a, T, Yes>
 where
-    T: Task,
+    T: Task + 'static,
 {
     pub fn build(self) -> SeedWriter<'a, T> {
         let param = CastepParam::<T>::build()
