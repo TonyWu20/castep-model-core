@@ -6,6 +6,8 @@ pub mod lattice;
 pub mod model_type;
 pub mod param_writer;
 pub mod parser;
+#[cfg(test)]
+mod test;
 
 extern crate castep_periodic_table as cpt;
 extern crate nalgebra as na;

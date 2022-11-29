@@ -96,16 +96,6 @@ where
     T: AsRef<LatticeModel<CellModel>>,
 {
     fn from(cell_model: T) -> Self {
-        let y_axis: Vector3<f64> = Vector::y();
-        let b_vec = cell_model
-            .as_ref()
-            .lattice_vectors()
-            .unwrap()
-            .vectors()
-            .column(1);
-        let b_to_y_angle = b_vec.angle(&y_axis);
-        let rot_axis = b_vec.cross(&y_axis).normalize();
-        let rot_quatd: UnitQuaternion<f64> = UnitQuaternion::new(rot_axis * b_to_y_angle);
         let new_lat_vec = LatticeVectors::new(
             cell_model
                 .as_ref()
@@ -132,7 +122,19 @@ where
             .collect();
         msi_atoms.sort_by_key(|a| a.atom_id());
         let mut msi_model = Self::new(Some(new_lat_vec), msi_atoms, MsiModel::default());
-        msi_model.rotate(&rot_quatd);
+        let y_axis: Vector3<f64> = Vector::y();
+        let b_vec = cell_model
+            .as_ref()
+            .lattice_vectors()
+            .unwrap()
+            .vectors()
+            .column(1);
+        let b_to_y_angle = b_vec.angle(&y_axis);
+        if b_to_y_angle != 0.0 {
+            let rot_axis = b_vec.cross(&y_axis).normalize();
+            let rot_quatd: UnitQuaternion<f64> = UnitQuaternion::new(rot_axis * b_to_y_angle);
+            msi_model.rotate(&rot_quatd);
+        }
         msi_model
     }
 }
