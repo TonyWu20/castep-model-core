@@ -25,20 +25,14 @@ where
     T: ModelInfo,
 {
     /// Creates a new [`Atom`].
-    pub fn new(
-        element_symbol: String,
-        element_id: u32,
-        xyz: Point3<f64>,
-        atom_id: u32,
-        model_type: T,
-    ) -> Self {
+    pub fn new(element_symbol: String, element_id: u32, xyz: Point3<f64>, atom_id: u32) -> Self {
         Self {
             element_symbol,
             element_id,
             xyz,
             fractional_xyz: None,
             atom_id,
-            format_type: model_type,
+            format_type: T::default(),
         }
     }
 
@@ -77,15 +71,6 @@ where
     /// Sets the atom id of this [`Atom<Format>`].
     pub fn set_atom_id(&mut self, atom_id: u32) {
         self.atom_id = atom_id;
-    }
-
-    /// Returns a reference to the format of this [`Atom<Format>`].
-    pub fn model_type(&self) -> &T {
-        &self.format_type
-    }
-    /// Sets the format of this [`Atom<Format>`].
-    pub fn set_model_type(&mut self, model_type: T) {
-        self.format_type = model_type;
     }
 
     pub fn fractional_xyz(&self) -> Option<&Point3<f64>> {
