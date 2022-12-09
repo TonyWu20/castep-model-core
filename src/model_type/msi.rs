@@ -10,39 +10,9 @@ use crate::{
 
 use super::{cell::CellModel, ModelInfo};
 
-#[derive(Debug, Clone)]
-pub struct MsiModel {
-    periodic_type: u8,
-    space_group: String,
-    cry_tolerance: f64,
-}
-
-impl MsiModel {
-    /// Returns the periodic type of this [`MsiModel`].
-    pub fn periodic_type(&self) -> u8 {
-        self.periodic_type
-    }
-
-    /// Returns a reference to the space group of this [`MsiModel`].
-    pub fn space_group(&self) -> &str {
-        self.space_group.as_ref()
-    }
-
-    /// Returns the cry tolerance of this [`MsiModel`].
-    pub fn cry_tolerance(&self) -> f64 {
-        self.cry_tolerance
-    }
-}
-
-impl Default for MsiModel {
-    fn default() -> Self {
-        Self {
-            periodic_type: 100_u8,
-            space_group: "1 1".to_string(),
-            cry_tolerance: 0.05,
-        }
-    }
-}
+#[derive(Debug, Clone, Default)]
+/// A unit struct to mark `msi` format
+pub struct MsiModel;
 
 impl ModelInfo for MsiModel {}
 
@@ -103,7 +73,6 @@ where
                 .unwrap()
                 .vectors()
                 .to_owned(),
-            MsiModel::default(),
         );
         // The inverse of the fractional coord matrix is the cartesian coord matrix
         let mut msi_atoms: Vec<Atom<MsiModel>> = cell_model
@@ -111,17 +80,16 @@ where
             .atoms()
             .iter()
             .map(|atom| -> Atom<MsiModel> {
-                Atom::new(
+                Atom::<MsiModel>::new(
                     atom.element_symbol().to_string(),
                     atom.element_id(),
                     *atom.xyz(),
                     atom.atom_id(),
-                    MsiModel::default(),
                 )
             })
             .collect();
         msi_atoms.sort_by_key(|a| a.atom_id());
-        let mut msi_model = Self::new(Some(new_lat_vec), msi_atoms, MsiModel::default());
+        let mut msi_model = Self::new(Some(new_lat_vec), msi_atoms);
         let y_axis: Vector3<f64> = Vector::y();
         let b_vec = cell_model
             .as_ref()
@@ -151,18 +119,12 @@ impl LatticeModel<MsiModel> {
                 "# MSI CERIUS2 DataModel File Version 4 0\n".to_string(),
                 "(1 Model\n".to_string(),
                 "  (A I CRY/DISPLAY (192 256))\n".to_string(),
-                format!(
-                    "  (A I PeriodicType {})\n",
-                    self.model_type().periodic_type()
-                ),
-                format!(
-                    "  (A C SpaceGroup \"{}\")\n",
-                    self.model_type().space_group()
-                ),
+                format!("  (A I PeriodicType {})\n", self.settings().periodic_type()),
+                format!("  (A C SpaceGroup \"{}\")\n", self.settings().space_group()),
                 format!("{}", lattice_vectors),
                 format!(
                     "  (A D CRY/TOLERANCE {})\n",
-                    self.model_type().cry_tolerance()
+                    self.settings().cry_tolerance()
                 ),
             ];
             format!("{}{})", headers_vectors.concat(), atoms_output.concat())

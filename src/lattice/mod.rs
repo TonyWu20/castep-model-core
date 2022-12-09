@@ -2,28 +2,29 @@ use std::{collections::HashSet, ops::Add};
 
 use na::{Matrix3, Vector3};
 
-use crate::{atom::Atom, error::InvalidIndex, model_type::ModelInfo, Transformation};
+use crate::{
+    atom::Atom,
+    error::InvalidIndex,
+    model_type::{ModelInfo, Settings},
+    Transformation,
+};
 
 #[derive(Debug, Clone)]
 pub struct LatticeModel<T: ModelInfo> {
     lattice_vectors: Option<LatticeVectors<T>>,
     atoms: Vec<Atom<T>>,
-    model_type: T,
+    settings: Settings<T>,
 }
 
 impl<T> LatticeModel<T>
 where
     T: ModelInfo,
 {
-    pub fn new(
-        lattice_vectors: Option<LatticeVectors<T>>,
-        atoms: Vec<Atom<T>>,
-        model_type: T,
-    ) -> Self {
+    pub fn new(lattice_vectors: Option<LatticeVectors<T>>, atoms: Vec<Atom<T>>) -> Self {
         Self {
             lattice_vectors,
             atoms,
-            model_type,
+            settings: Settings::default(),
         }
     }
 
@@ -33,10 +34,6 @@ where
     }
     pub fn atoms(&self) -> &[Atom<T>] {
         self.atoms.as_ref()
-    }
-
-    pub fn model_type(&self) -> &T {
-        &self.model_type
     }
 
     pub fn atoms_mut(&mut self) -> &mut Vec<Atom<T>> {
@@ -84,6 +81,10 @@ where
     pub fn lattice_vectors_mut(&mut self) -> &mut Option<LatticeVectors<T>> {
         &mut self.lattice_vectors
     }
+
+    pub fn settings(&self) -> &Settings<T> {
+        &self.settings
+    }
 }
 
 impl<T: ModelInfo> AsRef<LatticeModel<T>> for LatticeModel<T> {
@@ -120,10 +121,10 @@ impl<T> LatticeVectors<T>
 where
     T: ModelInfo,
 {
-    pub fn new(vectors: Matrix3<f64>, model_type: T) -> Self {
+    pub fn new(vectors: Matrix3<f64>) -> Self {
         Self {
             vectors,
-            model_type,
+            model_type: T::default(),
         }
     }
 
@@ -157,10 +158,6 @@ where
 
     pub fn vectors(&self) -> &Matrix3<f64> {
         &self.vectors
-    }
-
-    pub fn model_type(&self) -> &T {
-        &self.model_type
     }
 
     pub fn set_vectors(&mut self, vectors: Matrix3<f64>) {
@@ -207,12 +204,12 @@ where
         let Self {
             lattice_vectors,
             atoms: _,
-            model_type,
+            settings,
         } = self;
         Self {
             lattice_vectors,
             atoms: new_atoms,
-            model_type,
+            settings,
         }
     }
 }

@@ -31,17 +31,13 @@ impl<'a> TryFrom<&'a str> for LatticeModel<MsiModel> {
                 .collect();
             let lattice_vector_matrix = na::Matrix3::from_vec(lattice_vector_flatten);
             let lattice_vectors: LatticeVectors<MsiModel> =
-                LatticeVectors::new(lattice_vector_matrix, MsiModel::default());
+                LatticeVectors::new(lattice_vector_matrix);
             let (rest, _) = skip_to_atoms(rest)?;
             let (_, atoms) = many1(parse_atom)(rest)?;
-            Ok(LatticeModel::new(
-                Some(lattice_vectors),
-                atoms,
-                MsiModel::default(),
-            ))
+            Ok(LatticeModel::new(Some(lattice_vectors), atoms))
         } else {
             let (_, atoms) = many1(parse_atom)(rest)?;
-            Ok(LatticeModel::new(None, atoms, MsiModel::default()))
+            Ok(LatticeModel::new(None, atoms))
         }
     }
 }
@@ -135,13 +131,7 @@ fn parse_atom<'b, 'a: 'b>(input: &'a str) -> IResult<&'a str, Atom<MsiModel>> {
     let xyz = Point3::from_slice(&xyz);
     Ok((
         rest,
-        Atom::new(
-            element_symbol.to_string(),
-            element_id,
-            xyz,
-            atom_id,
-            MsiModel::default(),
-        ),
+        Atom::<MsiModel>::new(element_symbol.to_string(), element_id, xyz, atom_id),
     ))
 }
 
@@ -163,14 +153,9 @@ fn test_msi() {
         }
     }
 
-    let test_lat = read_to_string("SAC_GDY_Ag.msi").unwrap();
+    let test_lat = read_to_string("SAC_GDY_V.msi").unwrap();
     let lat = LatticeModel::<MsiModel>::try_from(test_lat.as_str()).unwrap();
     let cell: LatticeModel<CellModel> = LatticeModel::from(lat.clone());
-    let gdy_ag_lat = GDYLattice {
-        lattice: lat,
-        name: "SAC_GDY_Ag.msi".to_string(),
-    };
-    let msi_export = gdy_ag_lat.lattice().msi_export();
-    println!("{}", msi_export);
-    write("SAC_GDY_Ag.cell", cell.cell_export()).unwrap();
+    println!("{:?}", lat);
+    write("SAC_GDY_V.cell", cell.cell_export()).unwrap();
 }

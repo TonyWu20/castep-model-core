@@ -16,40 +16,11 @@ use na::{UnitQuaternion, Vector, Vector3};
 
 use super::{msi::MsiModel, ModelInfo};
 
-#[derive(Clone, Debug, PartialEq)]
-/// Struct to represent `cell`format.
-pub struct CellModel {
-    /// List of k-points. Each k-point has xyz and a weight factor.
-    kpoints_list: Vec<[f64; 4]>,
-    kpoints_grid: [u8; 3],
-    kpoints_mp_spacing: Option<f64>,
-    kpoints_mp_offset: [f64; 3],
-    /// Option in `IONIC_CONSTRAINTS`
-    fix_all_cell: bool,
-    /// Option in `IONIC_CONSTRAINTS`
-    fix_com: bool,
-    external_efield: [f64; 3],
-    /// The order is `Rxx`, `Rxy`, `Rxz`, `Ryy`, `Ryz`, `Rzz`
-    external_pressure: [f64; 6],
-}
+#[derive(Debug, Clone, Default)]
+/// A unit struct to mark `cell`format.
+pub struct CellModel;
 
 impl ModelInfo for CellModel {}
-
-/// Default `CellFormat` values
-impl Default for CellModel {
-    fn default() -> Self {
-        Self {
-            kpoints_list: vec![[0.0, 0.0, 0.0, 1.0]],
-            kpoints_grid: [1, 1, 1],
-            kpoints_mp_spacing: None,
-            kpoints_mp_offset: [0.0, 0.0, 0.0],
-            fix_all_cell: true,
-            fix_com: false,
-            external_efield: [0.0, 0.0, 0.0],
-            external_pressure: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
-        }
-    }
-}
 
 /// Methods for `CellFormat`
 impl CellModel {
@@ -88,7 +59,6 @@ where
                 .unwrap()
                 .vectors()
                 .to_owned(),
-            CellModel::default(),
         );
         let fractional_coord_matrix = msi_model
             .as_ref()
@@ -106,14 +76,13 @@ where
                     atom.element_id(),
                     *atom.xyz(),
                     atom.atom_id(),
-                    CellModel::default(),
                 );
                 new_atom.set_fractional_xyz(Some(fractional_coord));
                 new_atom
             })
             .collect();
         cell_atoms.sort_by_key(|a| a.element_id());
-        Self::new(Some(new_lat_vec), cell_atoms, CellModel::default())
+        Self::new(Some(new_lat_vec), cell_atoms)
     }
 }
 
@@ -146,8 +115,8 @@ impl LatticeModel<CellModel> {
     */
     fn kpoints_list_str(&self) -> String {
         let kpoints_list: Vec<String> = self
-            .model_type()
-            .kpoints_list
+            .settings()
+            .kpoints_list()
             .iter()
             .map(|kpoint| {
                 let [x, y, z, weight] = kpoint;
@@ -159,8 +128,8 @@ impl LatticeModel<CellModel> {
     /// For output in `.cell` for `BandStructure` calculation.
     fn bs_kpoints_list_str(&self) -> String {
         let kpoints_list: Vec<String> = self
-            .model_type()
-            .kpoints_list
+            .settings()
+            .kpoints_list()
             .iter()
             .map(|kpoint| {
                 let [x, y, z, weight] = kpoint;
@@ -177,16 +146,16 @@ impl LatticeModel<CellModel> {
     fn misc_options(&self) -> String {
         let fix = format!(
             "FIX_ALL_CELL : {}\n\nFIX_COM : {}\n{}",
-            self.model_type().fix_all_cell,
-            self.model_type().fix_com,
+            self.settings().fix_all_cell(),
+            self.settings().fix_com(),
             self.ionic_constraints()
         );
-        let [ex, ey, ez] = self.model_type().external_efield;
+        let [ex, ey, ez] = self.settings().external_efield();
         let external_efield = CellModel::write_block((
             "EXTERNAL_EFIELD".to_string(),
             format!("{:16.10}{:16.10}{:16.10}\n", ex, ey, ez),
         ));
-        let [rxx, rxy, rxz, ryy, ryz, rzz] = self.model_type().external_pressure;
+        let [rxx, rxy, rxz, ryy, ryz, rzz] = self.settings().external_pressure();
         let external_pressure = CellModel::write_block((
             "EXTERNAL_PRESSURE".to_string(),
             format!(
@@ -355,10 +324,10 @@ impl LatticeModel<CellModel> {
     /// Build `KptAux` struct
     pub fn build_kptaux(&self) -> KptAux {
         KptAux::new(
-            self.model_type().kpoints_list.clone(),
-            self.model_type().kpoints_grid,
-            self.model_type().kpoints_mp_spacing,
-            self.model_type().kpoints_mp_offset,
+            self.settings().kpoints_list().to_vec(),
+            self.settings().kpoints_grid(),
+            self.settings().kpoints_mp_spacing(),
+            self.settings().kpoints_mp_offset(),
         )
     }
     /// Build `TrjAux` struct
