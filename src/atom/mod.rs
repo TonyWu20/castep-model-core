@@ -20,6 +20,37 @@ pub struct Atom<T: ModelInfo> {
     format_type: T,
 }
 
+pub struct AtomView<'a, T: ModelInfo> {
+    element_symbol: &'a str,
+    element_id: &'a u32,
+    xyz: &'a Point3<f64>,
+    fractional_xyz: Option<&'a Point3<f64>>,
+    atom_id: &'a u32,
+    format_type: T,
+}
+
+impl<'a, T: ModelInfo> AtomView<'a, T> {
+    pub fn xyz(&self) -> &Point3<f64> {
+        self.xyz
+    }
+
+    pub fn element_symbol(&self) -> &str {
+        self.element_symbol
+    }
+
+    pub fn element_id(&self) -> &u32 {
+        self.element_id
+    }
+
+    pub fn fractional_xyz(&self) -> Option<&Point3<f64>> {
+        self.fractional_xyz
+    }
+
+    pub fn atom_id(&self) -> &u32 {
+        self.atom_id
+    }
+}
+
 #[derive(Debug, Clone)]
 /// Struct of `Atom` as data-driven design.
 pub struct AtomCollection<T: ModelInfo> {
@@ -98,6 +129,49 @@ impl<T: ModelInfo> AtomCollection<T> {
         self.update_frac_xyz_at(index, fractional_xyz)?;
         self.update_atom_id_at(index, atom_id)?;
         Ok(())
+    }
+    pub fn view_atom_at<'a>(&self, index: usize) -> Result<AtomView<'a, T>, InvalidIndex> {
+        let element_symbol = self
+            .element_symbols
+            .get(index)
+            .ok_or(InvalidIndex)?
+            .as_str();
+        let element_id = self.element_ids.get(index).ok_or(InvalidIndex)?;
+        let xyz = self.xyz_coords.get(index).ok_or(InvalidIndex)?;
+        let fractional_xyz = self.fractional_xyz.get(index).ok_or(InvalidIndex)?.as_ref();
+        let atom_id = self.atom_ids.get(index).ok_or(InvalidIndex)?;
+        Ok(AtomView {
+            element_symbol,
+            element_id,
+            xyz,
+            fractional_xyz,
+            atom_id,
+            format_type: T::default(),
+        })
+    }
+
+    pub fn element_symbols(&self) -> &[String] {
+        self.element_symbols.as_ref()
+    }
+
+    pub fn element_ids(&self) -> &[u32] {
+        self.element_ids.as_ref()
+    }
+
+    pub fn xyz_coords(&self) -> &[Point3<f64>] {
+        self.xyz_coords.as_ref()
+    }
+
+    pub fn fractional_xyz(&self) -> &[Option<Point3<f64>>] {
+        self.fractional_xyz.as_ref()
+    }
+
+    pub fn atom_ids(&self) -> &[u32] {
+        self.atom_ids.as_ref()
+    }
+
+    pub fn size(&self) -> usize {
+        self.size
     }
 }
 
@@ -218,6 +292,23 @@ where
 
     fn translate(&mut self, translate_matrix: &na::Translation<f64, 3>) {
         self.set_xyz(translate_matrix.transform_point(self.xyz()))
+    }
+}
+
+impl<T> Transformation for AtomCollection<T>
+where
+    T: ModelInfo,
+{
+    fn rotate(&mut self, rotate_quatd: &na::UnitQuaternion<f64>) {
+        self.xyz_coords
+            .iter_mut()
+            .for_each(|point| *point = rotate_quatd.transform_point(point))
+    }
+
+    fn translate(&mut self, translate_matrix: &na::Translation<f64, 3>) {
+        self.xyz_coords
+            .iter_mut()
+            .for_each(|point| *point = translate_matrix.transform_point(point))
     }
 }
 
