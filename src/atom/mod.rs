@@ -1,9 +1,9 @@
-use crate::{model_type::ModelInfo, Transformation};
-use std::cmp::Ordering;
+use crate::{error::InvalidIndex, model_type::ModelInfo, Transformation};
+use std::{cmp::Ordering, ops::Add};
 
 use na::Point3;
-/// Struct that defines an atom.
 #[derive(Debug, Clone)]
+/// Struct that defines an atom.
 pub struct Atom<T: ModelInfo> {
     /// The symbol of the element.
     element_symbol: String,
@@ -18,6 +18,125 @@ pub struct Atom<T: ModelInfo> {
     atom_id: u32,
     /// Format type
     format_type: T,
+}
+
+#[derive(Debug, Clone)]
+/// Struct of `Atom` as data-driven design.
+pub struct AtomCollection<T: ModelInfo> {
+    element_symbols: Vec<String>,
+    element_ids: Vec<u32>,
+    xyz_coords: Vec<Point3<f64>>,
+    fractional_xyz: Vec<Option<Point3<f64>>>,
+    atom_ids: Vec<u32>,
+    size: usize,
+    format_type: T,
+}
+
+impl<T: ModelInfo> AtomCollection<T> {
+    /// Update the `element_symbol` at the given index.
+    /// # Errors
+    /// This function will return an error if the index is out of bounds.
+    pub fn update_symbol_at(&mut self, index: usize, new_symbol: &str) -> Result<(), InvalidIndex> {
+        *self.element_symbols.get_mut(index).ok_or(InvalidIndex)? = new_symbol.into();
+        Ok(())
+    }
+    /// Update the `element_id` at the given index.
+    /// # Errors
+    /// This function will return an error if the index is out of bounds.
+    pub fn update_elm_id_at(&mut self, index: usize, new_elm_id: u32) -> Result<(), InvalidIndex> {
+        *self.element_ids.get_mut(index).ok_or(InvalidIndex)? = new_elm_id;
+        Ok(())
+    }
+    /// Update the `xyz` at the given index.
+    /// # Errors
+    /// This function will return an error if the index is out of bounds.
+    pub fn update_xyz_at(
+        &mut self,
+        index: usize,
+        new_xyz: Point3<f64>,
+    ) -> Result<(), InvalidIndex> {
+        *self.xyz_coords.get_mut(index).ok_or(InvalidIndex)? = new_xyz;
+        Ok(())
+    }
+    /// Update the `fractional_xyz` at the given index.
+    /// # Errors
+    /// This function will return an error if the index is out of bounds.
+    pub fn update_frac_xyz_at(
+        &mut self,
+        index: usize,
+        new_frac: Option<Point3<f64>>,
+    ) -> Result<(), InvalidIndex> {
+        *self.fractional_xyz.get_mut(index).ok_or(InvalidIndex)? = new_frac;
+        Ok(())
+    }
+    /// Update the `atom_id` at the given index.
+    /// # Errors
+    /// This function will return an error if the index is out of bounds.
+    pub fn update_atom_id_at(
+        &mut self,
+        index: usize,
+        new_atom_id: u32,
+    ) -> Result<(), InvalidIndex> {
+        *self.atom_ids.get_mut(index).ok_or(InvalidIndex)? = new_atom_id;
+        Ok(())
+    }
+    /// Update the whole atom at the given index.
+    /// # Errors
+    /// This function will return an error if the index is out of bounds.
+    pub fn update_atom_at(&mut self, index: usize, new_atom: Atom<T>) -> Result<(), InvalidIndex> {
+        let Atom {
+            element_symbol,
+            element_id,
+            xyz,
+            fractional_xyz,
+            atom_id,
+            format_type: _,
+        } = new_atom;
+        self.update_symbol_at(index, &element_symbol)?;
+        self.update_elm_id_at(index, element_id)?;
+        self.update_xyz_at(index, xyz)?;
+        self.update_frac_xyz_at(index, fractional_xyz)?;
+        self.update_atom_id_at(index, atom_id)?;
+        Ok(())
+    }
+}
+
+impl<T: ModelInfo> From<Vec<Atom<T>>> for AtomCollection<T> {
+    fn from(src: Vec<Atom<T>>) -> Self {
+        let atom_num = src.len();
+        let mut output = AtomCollection {
+            element_symbols: Vec::with_capacity(atom_num),
+            element_ids: Vec::with_capacity(atom_num),
+            xyz_coords: Vec::with_capacity(atom_num),
+            fractional_xyz: Vec::with_capacity(atom_num),
+            atom_ids: Vec::with_capacity(atom_num),
+            size: atom_num,
+            format_type: T::default(),
+        };
+        for (i, atom) in src.into_iter().enumerate() {
+            output.update_atom_at(i, atom).unwrap();
+        }
+        output
+    }
+}
+
+impl<T: ModelInfo> Add for AtomCollection<T> {
+    type Output = Self;
+
+    fn add(self, rhs: Self) -> Self::Output {
+        let size_self = self.size;
+        let size_rhs = rhs.size;
+        let new_size = size_self + size_rhs;
+        AtomCollection {
+            element_symbols: vec![self.element_symbols, rhs.element_symbols].concat(),
+            element_ids: vec![self.element_ids, rhs.element_ids].concat(),
+            xyz_coords: vec![self.xyz_coords, rhs.xyz_coords].concat(),
+            fractional_xyz: vec![self.fractional_xyz, rhs.fractional_xyz].concat(),
+            atom_ids: vec![self.atom_ids, rhs.atom_ids].concat(),
+            size: new_size,
+            format_type: T::default(),
+        }
+    }
 }
 
 impl<T> Atom<T>
