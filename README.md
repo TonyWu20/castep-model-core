@@ -2,6 +2,28 @@
 This crate serves for the fundamentals of parsing/edit/exporting a 3D atomistic model for performing tasks in `castep` and compatible with `Materials Studio.`
 This is my project to study writing rust to handle practical problems and how the 3d atomistic data flows through `castep` and `Materials Studio`. The status of development is dependent on the needs and challenges I meet in my daily routine.
 
+
+## Design
+
+### Data
+- Abstract
+    - Lattice vectors
+    - Atom
+        - element symbol
+            - other information (provided by `castep-periodic-table`)
+                - spin
+                - lcao
+                - used potential
+                - mass
+        - atomic number
+        - cartesian coordinate
+        - fractional coordinate
+        - id
+    - Bond (optional)
+- Concrete
+    - [`msi`](./doc/file_formats/cerius_2_msi.md)
+    - `cell`
+
 ## Progress
 The crate now supports reading from:
 1. `.msi`: the Cerius 2 format
