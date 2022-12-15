@@ -49,8 +49,8 @@ where
     // }
     pub fn get_vector_ab(&self, a_id: u32, b_id: u32) -> Result<Vector3<f64>, InvalidIndex> {
         if a_id != b_id {
-            let atom_a_xyz = self.view_atom_by_id(a_id)?.xyz();
-            let atom_b_xyz = self.view_atom_by_id(b_id)?.xyz();
+            let atom_a_xyz = self.view_atom_by_id(a_id)?.xyz().to_owned();
+            let atom_b_xyz = self.view_atom_by_id(b_id)?.xyz().to_owned();
             Ok(atom_b_xyz - atom_a_xyz)
         } else {
             Err(InvalidIndex)
@@ -62,7 +62,7 @@ where
             self.atoms()
                 .element_symbols()
                 .iter()
-                .zip(self.atoms.element_ids().iter())
+                .zip(self.atoms.atomic_nums().iter())
                 .map(|(sym, id)| (sym.to_string(), *id))
                 .collect::<Vec<(String, u32)>>()
                 .drain(..)
@@ -101,7 +101,7 @@ impl<T: ModelInfo> AsMut<LatticeModel<T>> for LatticeModel<T> {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Default)]
 pub struct LatticeVectors<T: ModelInfo> {
     vectors: Matrix3<f64>,
     model_type: T,
@@ -172,14 +172,14 @@ where
     T: ModelInfo,
 {
     fn rotate(&mut self, rotate_quatd: &na::UnitQuaternion<f64>) {
-        self.atoms().rotate(rotate_quatd);
+        self.atoms_mut().rotate(rotate_quatd);
         if let Some(lattice_vectors) = self.lattice_vectors_mut() {
             lattice_vectors.rotate(rotate_quatd);
         }
     }
 
     fn translate(&mut self, translate_matrix: &na::Translation<f64, 3>) {
-        self.atoms().translate(translate_matrix);
+        self.atoms_mut().translate(translate_matrix);
     }
 }
 
@@ -191,7 +191,7 @@ where
 {
     type Output = LatticeModel<T>;
 
-    fn add(mut self, rhs: Self) -> Self::Output {
+    fn add(self, rhs: Self) -> Self::Output {
         let new_atoms = self.atoms + rhs.atoms;
         let Self {
             lattice_vectors,

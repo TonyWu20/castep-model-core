@@ -1,7 +1,11 @@
-use crate::{error::InvalidIndex, model_type::ModelInfo, Transformation};
+use crate::{error::InvalidIndex, model_type::ModelInfo, CellModel, MsiModel, Transformation};
 use std::{cmp::Ordering, ops::Add};
 
 use na::Point3;
+
+mod atom_builder;
+
+pub use atom_builder::AtomCollectionBuilder;
 #[derive(Debug, Clone)]
 /// Struct that defines an atom.
 pub struct Atom<T: ModelInfo> {
@@ -51,11 +55,24 @@ impl<'a, T: ModelInfo> AtomView<'a, T> {
     }
 }
 
-#[derive(Debug, Clone)]
+impl<'a, T: ModelInfo> From<AtomView<'a, T>> for Atom<T> {
+    fn from(src: AtomView<'a, T>) -> Self {
+        Self {
+            element_symbol: src.element_symbol().into(),
+            element_id: *src.element_id(),
+            xyz: src.xyz().to_owned(),
+            fractional_xyz: src.fractional_xyz().copied(),
+            atom_id: *src.atom_id(),
+            format_type: T::default(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Default)]
 /// Struct of `Atom` as data-driven design.
 pub struct AtomCollection<T: ModelInfo> {
     element_symbols: Vec<String>,
-    element_ids: Vec<u32>,
+    atomic_nums: Vec<u32>,
     xyz_coords: Vec<Point3<f64>>,
     fractional_xyz: Vec<Option<Point3<f64>>>,
     atom_ids: Vec<u32>,
@@ -75,7 +92,7 @@ impl<T: ModelInfo> AtomCollection<T> {
     /// # Errors
     /// This function will return an error if the index is out of bounds.
     pub fn update_elm_id_at(&mut self, index: usize, new_elm_id: u32) -> Result<(), InvalidIndex> {
-        *self.element_ids.get_mut(index).ok_or(InvalidIndex)? = new_elm_id;
+        *self.atomic_nums.get_mut(index).ok_or(InvalidIndex)? = new_elm_id;
         Ok(())
     }
     /// Update the `xyz` at the given index.
@@ -130,13 +147,13 @@ impl<T: ModelInfo> AtomCollection<T> {
         self.update_atom_id_at(index, atom_id)?;
         Ok(())
     }
-    pub fn view_atom_at<'a>(&self, index: usize) -> Result<AtomView<'a, T>, InvalidIndex> {
+    pub fn view_atom_at(&self, index: usize) -> Result<AtomView<T>, InvalidIndex> {
         let element_symbol = self
             .element_symbols
             .get(index)
             .ok_or(InvalidIndex)?
             .as_str();
-        let element_id = self.element_ids.get(index).ok_or(InvalidIndex)?;
+        let element_id = self.atomic_nums.get(index).ok_or(InvalidIndex)?;
         let xyz = self.xyz_coords.get(index).ok_or(InvalidIndex)?;
         let fractional_xyz = self.fractional_xyz.get(index).ok_or(InvalidIndex)?.as_ref();
         let atom_id = self.atom_ids.get(index).ok_or(InvalidIndex)?;
@@ -154,16 +171,24 @@ impl<T: ModelInfo> AtomCollection<T> {
         self.element_symbols.as_ref()
     }
 
-    pub fn element_ids(&self) -> &[u32] {
-        self.element_ids.as_ref()
+    pub fn atomic_nums(&self) -> &[u32] {
+        self.atomic_nums.as_ref()
     }
 
     pub fn xyz_coords(&self) -> &[Point3<f64>] {
         self.xyz_coords.as_ref()
     }
 
+    pub fn xyz_coords_mut(&mut self) -> &mut [Point3<f64>] {
+        self.xyz_coords.as_mut()
+    }
+
     pub fn fractional_xyz(&self) -> &[Option<Point3<f64>>] {
         self.fractional_xyz.as_ref()
+    }
+
+    pub fn fractional_xyz_mut(&mut self) -> &mut [Option<Point3<f64>>] {
+        self.fractional_xyz.as_mut()
     }
 
     pub fn atom_ids(&self) -> &[u32] {
@@ -180,7 +205,7 @@ impl<T: ModelInfo> From<Vec<Atom<T>>> for AtomCollection<T> {
         let atom_num = src.len();
         let mut output = AtomCollection {
             element_symbols: Vec::with_capacity(atom_num),
-            element_ids: Vec::with_capacity(atom_num),
+            atomic_nums: Vec::with_capacity(atom_num),
             xyz_coords: Vec::with_capacity(atom_num),
             fractional_xyz: Vec::with_capacity(atom_num),
             atom_ids: Vec::with_capacity(atom_num),
@@ -194,6 +219,27 @@ impl<T: ModelInfo> From<Vec<Atom<T>>> for AtomCollection<T> {
     }
 }
 
+impl<'a, T: ModelInfo> From<&'a AtomCollection<T>> for Vec<AtomView<'a, T>> {
+    fn from(src: &'a AtomCollection<T>) -> Self {
+        (0..src.size)
+            .into_iter()
+            .map(|i| src.view_atom_at(i).unwrap())
+            .collect()
+    }
+}
+
+impl<T: ModelInfo> From<AtomCollection<T>> for Vec<Atom<T>> {
+    fn from(src: AtomCollection<T>) -> Self {
+        (0..src.size)
+            .into_iter()
+            .map(|i| -> Atom<T> {
+                let view = src.view_atom_at(i).unwrap();
+                view.into()
+            })
+            .collect()
+    }
+}
+
 impl<T: ModelInfo> Add for AtomCollection<T> {
     type Output = Self;
 
@@ -203,7 +249,7 @@ impl<T: ModelInfo> Add for AtomCollection<T> {
         let new_size = size_self + size_rhs;
         AtomCollection {
             element_symbols: vec![self.element_symbols, rhs.element_symbols].concat(),
-            element_ids: vec![self.element_ids, rhs.element_ids].concat(),
+            atomic_nums: vec![self.atomic_nums, rhs.atomic_nums].concat(),
             xyz_coords: vec![self.xyz_coords, rhs.xyz_coords].concat(),
             fractional_xyz: vec![self.fractional_xyz, rhs.fractional_xyz].concat(),
             atom_ids: vec![self.atom_ids, rhs.atom_ids].concat(),
@@ -309,6 +355,35 @@ where
         self.xyz_coords
             .iter_mut()
             .for_each(|point| *point = translate_matrix.transform_point(point))
+    }
+}
+
+impl From<AtomCollection<MsiModel>> for AtomCollection<CellModel> {
+    fn from(src: AtomCollection<MsiModel>) -> Self {
+        let AtomCollection {
+            element_symbols,
+            atomic_nums: element_ids,
+            xyz_coords,
+            fractional_xyz,
+            atom_ids,
+            size,
+            format_type: _,
+        } = src;
+        Self {
+            element_symbols,
+            atomic_nums: element_ids,
+            xyz_coords,
+            fractional_xyz,
+            atom_ids,
+            size,
+            format_type: CellModel::default(),
+        }
+    }
+}
+
+impl<T: ModelInfo> AsRef<AtomCollection<T>> for &AtomCollection<T> {
+    fn as_ref(&self) -> &AtomCollection<T> {
+        self
     }
 }
 

@@ -10,12 +10,14 @@ use nom::{
     IResult,
 };
 
-use crate::atom::Atom;
+use crate::atom::{Atom, AtomCollection};
 use crate::lattice::{LatticeModel, LatticeVectors};
 use crate::model_type::msi::MsiModel;
 
 use super::{decimal, float};
 extern crate nom;
+
+mod state_machine;
 
 impl<'a> TryFrom<&'a str> for LatticeModel<MsiModel> {
     type Error = nom::Err<nom::error::Error<&'a str>>;
@@ -34,10 +36,12 @@ impl<'a> TryFrom<&'a str> for LatticeModel<MsiModel> {
                 LatticeVectors::new(lattice_vector_matrix);
             let (rest, _) = skip_to_atoms(rest)?;
             let (_, atoms) = many1(parse_atom)(rest)?;
-            Ok(LatticeModel::new(Some(lattice_vectors), atoms))
+            let atom_collection: AtomCollection<MsiModel> = atoms.into();
+            Ok(LatticeModel::new(Some(lattice_vectors), atom_collection))
         } else {
             let (_, atoms) = many1(parse_atom)(rest)?;
-            Ok(LatticeModel::new(None, atoms))
+            let atom_collection: AtomCollection<MsiModel> = atoms.into();
+            Ok(LatticeModel::new(None, atom_collection))
         }
     }
 }
