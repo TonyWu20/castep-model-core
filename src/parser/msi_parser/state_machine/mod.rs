@@ -192,8 +192,7 @@ impl<'a> MsiParser<'a, Start> {
     /// finished with state transisted to `Analyzed`
     fn analyze(mut self) -> MsiParser<'a, Analyzed> {
         // While we have fields
-        while Self::get_field(self.to_parse.unwrap()).is_ok() {
-            let (rest, parsed_field) = Self::get_field(self.to_parse.unwrap()).unwrap();
+        while let Ok((rest, parsed_field)) = Self::get_field(self.to_parse.unwrap()) {
             // Check if it is an object.
             if let Ok((object_fields, object_type)) = Self::get_object_type(parsed_field) {
                 if object_type == "Atom" {
