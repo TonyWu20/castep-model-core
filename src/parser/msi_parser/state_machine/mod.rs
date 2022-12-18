@@ -1,24 +1,44 @@
 use std::{fmt::Debug, marker::PhantomData};
 
+use nalgebra::{Matrix3, Point3};
 use nom::{
     branch::alt,
     bytes::complete::{tag, take_until},
-    character::complete::{alpha1, line_ending, space0, space1},
+    character::complete::{alpha1, alphanumeric1, line_ending, space0, space1},
     combinator::{peek, recognize},
+    multi::{many0, many1},
     sequence::{delimited, preceded, terminated, tuple},
     IResult,
 };
 
-use crate::parser::decimal;
+use crate::{
+    atom::{AtomCollection, AtomCollectionBuilder},
+    builder_typestate::No,
+    lattice::LatticeVectors,
+    model_type::Settings,
+    parser::{
+        decimal,
+        msi_parser::state_machine::model_attributes_parser::{
+            parse_cry_tolerance, parse_space_group,
+        },
+    },
+    LatticeModel, MsiModel,
+};
+
+use self::{
+    atom_parser::{parse_acl, parse_id, parse_xyz},
+    model_attributes_parser::{hashmap_attrs, parse_periodic_type, parse_vector},
+};
 
 mod atom_parser;
 mod helper;
+mod model_attributes_parser;
 
-trait ParserState: Debug {}
+pub trait ParserState: Debug {}
 
 #[derive(Debug)]
 /// A parser changes its state line by line.
-struct MsiParser<'a, S: ParserState> {
+pub struct MsiParser<'a, S: ParserState> {
     // To denote the state that the input
     // has been completly consumed, use `None`
     to_parse: Option<&'a str>,
@@ -87,7 +107,11 @@ impl<'a, S: ParserState> MsiParser<'a, S> {
     /// **It will not consume the type annotation and the spaces before the
     /// value fields. The returned remaining input is untouched.**
     fn get_attribute_type(attr_input: &str) -> IResult<&str, &str> {
-        peek(delimited(tuple((alpha1, space1)), alpha1, space1))(attr_input)
+        peek(delimited(
+            tuple((alpha1, space1)),
+            recognize(many1(alt((alphanumeric1, tag("/"))))),
+            space1,
+        ))(attr_input)
     }
     /// Extract either an attribute or an object.
     /// Only works when the input has been pushed into a `Model`.
@@ -104,13 +128,13 @@ impl<'a, S: ParserState> MsiParser<'a, S> {
 /// A zero-sized struct marking the parser received the file content.
 /// It will transits to `Model<ModelStates::Init>` with taking until
 /// the beginning of a model
-struct Loaded;
+pub(crate) struct Loaded;
 impl ParserState for Loaded {}
 
 impl<'a> MsiParser<'a, Loaded> {
     /// Init a new parser by feeding the `msi` file,
     /// which has been read into string.
-    fn new(input: &'a str) -> Self {
+    pub fn new(input: &'a str) -> Self {
         Self {
             to_parse: Some(input),
             num_atom: 0,
@@ -132,7 +156,7 @@ impl<'a> MsiParser<'a, Loaded> {
         recognize(tuple((tag("(1 Model"), line_ending)))(input)
     }
     /// Transits state into `Start` by entering the scope of model.
-    fn starts(self) -> MsiParser<'a, Start> {
+    pub fn starts(self) -> MsiParser<'a, Start> {
         let (rest, _): (&'a str, &'a str) = Self::get_to_model(self.to_parse.unwrap()).unwrap();
         let (rest, _) = Self::enter_model(rest).unwrap();
         MsiParser {
@@ -168,7 +192,7 @@ impl<'a> MsiParser<'a, Loaded> {
 /// vectors. Then I can invoke parsing workflow for each vec of field I am
 /// interested in.
 #[derive(Debug)]
-struct Start {}
+pub(crate) struct Start {}
 impl ParserState for Start {}
 
 impl<'a> MsiParser<'a, Start> {
@@ -190,7 +214,7 @@ impl<'a> MsiParser<'a, Start> {
     /// Loop over the input to parse attributes or objects,
     /// store the parsed contents into corresponding fields,
     /// finished with state transisted to `Analyzed`
-    fn analyze(mut self) -> MsiParser<'a, Analyzed> {
+    pub fn analyze(mut self) -> MsiParser<'a, Analyzed> {
         // While we have fields
         while let Ok((rest, parsed_field)) = Self::get_field(self.to_parse.unwrap()) {
             // Check if it is an object.
@@ -236,16 +260,83 @@ impl<'a> MsiParser<'a, Start> {
 }
 
 #[derive(Debug)]
-struct Analyzed {}
+pub(crate) struct Analyzed {}
 impl ParserState for Analyzed {}
 
-// impl<'a> MsiParser<'a, Start> {
-// }
-
-#[derive(Debug)]
-struct Atom;
-#[derive(Debug)]
-struct Bond;
+impl<'a> MsiParser<'a, Analyzed> {
+    fn parse_attributes(&self) -> Settings<MsiModel> {
+        if self.model_attributes.is_empty() {
+            Settings::default()
+        } else {
+            let attr_table = hashmap_attrs(self.model_attributes.as_ref());
+            let (_, periodic_type) =
+                parse_periodic_type(attr_table.get("PeriodicType").expect("No `PeriodicType`"))
+                    .unwrap();
+            let (_, cry_tolerance) =
+                parse_cry_tolerance(attr_table.get("CRY/TOLERANCE").expect("No `CRY/TOLERANCE`"))
+                    .unwrap();
+            let (_, space_group) =
+                parse_space_group(attr_table.get("SpaceGroup").expect("No `SpaceGroup`")).unwrap();
+            Settings::new_msi_settings(periodic_type, space_group, cry_tolerance)
+        }
+    }
+    fn parse_lattice_vectors(&self) -> Option<LatticeVectors<MsiModel>> {
+        if self.model_attributes.is_empty() {
+            None
+        } else {
+            let attr_table = hashmap_attrs(self.model_attributes.as_ref());
+            let (_, vec_a) = parse_vector(attr_table.get("A3").unwrap()).unwrap();
+            let (_, vec_b) = parse_vector(attr_table.get("B3").unwrap()).unwrap();
+            let (_, vec_c) = parse_vector(attr_table.get("C3").unwrap()).unwrap();
+            let lattice_vector = Matrix3::from_columns(&[vec_a, vec_b, vec_c]);
+            Some(LatticeVectors::new(lattice_vector))
+        }
+    }
+    fn parse_atoms(&self) -> AtomCollection<MsiModel> {
+        let mut element_symbols: Vec<String> = Vec::with_capacity(self.num_atom);
+        let mut atomic_numbers: Vec<u8> = Vec::with_capacity(self.num_atom);
+        let mut xyz_coords: Vec<Point3<f64>> = Vec::with_capacity(self.num_atom);
+        let mut atom_ids: Vec<u32> = Vec::with_capacity(self.num_atom);
+        let frac_xyz: Vec<Option<Point3<f64>>> =
+            (0..self.num_atom).into_iter().map(|_| None).collect();
+        self.atoms.iter().for_each(|atom_fields| {
+            let (_, atom_attrs) = many0(Self::take_attribute)(atom_fields).unwrap();
+            atom_attrs.iter().for_each(|item| {
+                if let Ok((_, acl)) = parse_acl(item) {
+                    let (num, symbol) = acl;
+                    atomic_numbers.push(num);
+                    element_symbols.push(symbol.into());
+                } else if let Ok((_, xyz)) = parse_xyz(item) {
+                    xyz_coords.push(xyz);
+                } else if let Ok((_, id)) = parse_id(item) {
+                    atom_ids.push(id);
+                } else {
+                }
+            })
+        });
+        let builder = AtomCollectionBuilder::<MsiModel, No>::new(self.num_atom);
+        builder
+            .with_atom_ids(&atom_ids)
+            .unwrap()
+            .with_element_symbols(&element_symbols)
+            .unwrap()
+            .with_atomic_nums(&atomic_numbers)
+            .unwrap()
+            .with_xyz_coords(&xyz_coords)
+            .unwrap()
+            .with_fractional_xyz(&frac_xyz)
+            .unwrap()
+            .finish()
+            .unwrap()
+            .build()
+    }
+    pub fn build_lattice_model(&self) -> LatticeModel<MsiModel> {
+        let settings = self.parse_attributes();
+        let lattice_vector = self.parse_lattice_vectors();
+        let atoms = self.parse_atoms();
+        LatticeModel::new(lattice_vector, atoms, settings)
+    }
+}
 
 mod error;
 
@@ -253,13 +344,21 @@ mod error;
 mod test {
     use std::fs::read_to_string;
 
+    use crate::parser::msi_parser::state_machine::Analyzed;
+
     use super::MsiParser;
 
     #[test]
     fn parsing() {
         let file_content = read_to_string("SAC_GDY_V.msi").unwrap();
         let parser = MsiParser::new(&file_content);
-        let parser = parser.starts().analyze();
-        println!("{:?}", parser);
+        let mut parser = parser.starts().analyze();
+        println!("{:?}", parser.parse_atoms());
+        parser.model_attributes.sort_by_key(|item| {
+            let (_, key) = MsiParser::<Analyzed>::get_attribute_type(item).unwrap();
+            key
+        });
+        println!("{:?}", parser.parse_lattice_vectors());
+        println!("{:?}", parser.build_lattice_model());
     }
 }

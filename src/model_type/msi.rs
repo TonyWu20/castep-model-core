@@ -10,7 +10,7 @@ use crate::{
     Transformation,
 };
 
-use super::{cell::CellModel, ModelInfo};
+use super::{cell::CellModel, ModelInfo, Settings};
 
 #[derive(Debug, Clone, Default)]
 /// A unit struct to mark `msi` format
@@ -117,7 +117,7 @@ where
         msi_atom_array.sort_by_key(|a| a.atom_id());
         // Convert AoS back to SoA.
         let msi_atom_collection: AtomCollection<MsiModel> = msi_atom_array.into();
-        let mut msi_model = Self::new(Some(new_lat_vec), msi_atom_collection);
+        let mut msi_model = Self::new(Some(new_lat_vec), msi_atom_collection, Settings::default());
         let y_axis: Vector3<f64> = Vector::y();
         let b_vec = cell_model
             .as_ref()
@@ -170,7 +170,7 @@ impl<'a> Display for AtomView<'a, MsiModel> {
   )
 "#,
             item_id = self.atom_id() + 1,
-            elm_id = self.element_id(),
+            elm_id = self.atomic_number(),
             elm = self.element_symbol(),
             x = self.xyz().x,
             y = self.xyz().y,

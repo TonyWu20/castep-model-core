@@ -20,11 +20,15 @@ impl<T> LatticeModel<T>
 where
     T: ModelInfo,
 {
-    pub fn new(lattice_vectors: Option<LatticeVectors<T>>, atoms: AtomCollection<T>) -> Self {
+    pub fn new(
+        lattice_vectors: Option<LatticeVectors<T>>,
+        atoms: AtomCollection<T>,
+        settings: Settings<T>,
+    ) -> Self {
         Self {
             lattice_vectors,
             atoms,
-            settings: Settings::default(),
+            settings,
         }
     }
 
@@ -57,16 +61,16 @@ where
         }
     }
     pub fn list_element(&self) -> Vec<String> {
-        let mut elm_list: Vec<(String, u32)> = vec![];
+        let mut elm_list: Vec<(String, u8)> = vec![];
         elm_list.extend(
             self.atoms()
                 .element_symbols()
                 .iter()
                 .zip(self.atoms.atomic_nums().iter())
                 .map(|(sym, id)| (sym.to_string(), *id))
-                .collect::<Vec<(String, u32)>>()
+                .collect::<Vec<(String, u8)>>()
                 .drain(..)
-                .collect::<HashSet<(String, u32)>>()
+                .collect::<HashSet<(String, u8)>>()
                 .into_iter(),
         );
         elm_list.sort_unstable_by(|a, b| {

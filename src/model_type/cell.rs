@@ -15,7 +15,7 @@ use cpt::{data::ELEMENT_TABLE, element::LookupElement};
 use na::{UnitQuaternion, Vector, Vector3};
 use nalgebra::Point3;
 
-use super::{msi::MsiModel, ModelInfo};
+use super::{msi::MsiModel, ModelInfo, Settings};
 
 #[derive(Debug, Clone, Default)]
 /// A unit struct to mark `cell`format.
@@ -79,7 +79,7 @@ where
             .for_each(|(i, f_xyz)| {
                 *f_xyz = Some(*frac_coords.get(i).unwrap());
             });
-        Self::new(Some(new_lat_vec), cell_atoms)
+        Self::new(Some(new_lat_vec), cell_atoms, Settings::default())
     }
 }
 

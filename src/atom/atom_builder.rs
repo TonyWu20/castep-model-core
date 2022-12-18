@@ -17,7 +17,7 @@ where
     S: BuildState,
 {
     element_symbols: Option<Vec<String>>,
-    atomic_nums: Option<Vec<u32>>,
+    atomic_nums: Option<Vec<u8>>,
     xyz_coords: Option<Vec<Point3<f64>>>,
     fractional_xyz: Option<Vec<Option<Point3<f64>>>>,
     atom_ids: Option<Vec<u32>>,
@@ -89,7 +89,7 @@ impl<T: ModelInfo, S: BuildState> AtomCollectionBuilder<T, S> {
     /// with the builder's given size.
     pub fn with_atomic_nums(
         mut self,
-        atomic_nums: &[u32],
+        atomic_nums: &[u8],
     ) -> Result<Self, AtomCollectionBuildingError> {
         match atomic_nums.len().cmp(&self.size) {
             Ordering::Equal => {

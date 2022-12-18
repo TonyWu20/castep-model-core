@@ -12,7 +12,7 @@ pub struct Atom<T: ModelInfo> {
     /// The symbol of the element.
     element_symbol: String,
     /// The atomic number of the element in periodic table.
-    element_id: u32,
+    atomic_number: u8,
     /// The cartesian coordinate of the atom.
     xyz: Point3<f64>,
     /// The fractional coordinate of the atom in a lattice.
@@ -26,7 +26,7 @@ pub struct Atom<T: ModelInfo> {
 
 pub struct AtomView<'a, T: ModelInfo> {
     element_symbol: &'a str,
-    element_id: &'a u32,
+    atomic_number: &'a u8,
     xyz: &'a Point3<f64>,
     fractional_xyz: Option<&'a Point3<f64>>,
     atom_id: &'a u32,
@@ -42,8 +42,8 @@ impl<'a, T: ModelInfo> AtomView<'a, T> {
         self.element_symbol
     }
 
-    pub fn element_id(&self) -> &u32 {
-        self.element_id
+    pub fn atomic_number(&self) -> &u8 {
+        self.atomic_number
     }
 
     pub fn fractional_xyz(&self) -> Option<&Point3<f64>> {
@@ -59,7 +59,7 @@ impl<'a, T: ModelInfo> From<AtomView<'a, T>> for Atom<T> {
     fn from(src: AtomView<'a, T>) -> Self {
         Self {
             element_symbol: src.element_symbol().into(),
-            element_id: *src.element_id(),
+            atomic_number: *src.atomic_number(),
             xyz: src.xyz().to_owned(),
             fractional_xyz: src.fractional_xyz().copied(),
             atom_id: *src.atom_id(),
@@ -72,7 +72,7 @@ impl<'a, T: ModelInfo> From<AtomView<'a, T>> for Atom<T> {
 /// Struct of `Atom` as data-driven design.
 pub struct AtomCollection<T: ModelInfo> {
     element_symbols: Vec<String>,
-    atomic_nums: Vec<u32>,
+    atomic_nums: Vec<u8>,
     xyz_coords: Vec<Point3<f64>>,
     fractional_xyz: Vec<Option<Point3<f64>>>,
     atom_ids: Vec<u32>,
@@ -91,7 +91,7 @@ impl<T: ModelInfo> AtomCollection<T> {
     /// Update the `element_id` at the given index.
     /// # Errors
     /// This function will return an error if the index is out of bounds.
-    pub fn update_elm_id_at(&mut self, index: usize, new_elm_id: u32) -> Result<(), InvalidIndex> {
+    pub fn update_elm_id_at(&mut self, index: usize, new_elm_id: u8) -> Result<(), InvalidIndex> {
         *self.atomic_nums.get_mut(index).ok_or(InvalidIndex)? = new_elm_id;
         Ok(())
     }
@@ -134,7 +134,7 @@ impl<T: ModelInfo> AtomCollection<T> {
     pub fn update_atom_at(&mut self, index: usize, new_atom: Atom<T>) -> Result<(), InvalidIndex> {
         let Atom {
             element_symbol,
-            element_id,
+            atomic_number: element_id,
             xyz,
             fractional_xyz,
             atom_id,
@@ -159,7 +159,7 @@ impl<T: ModelInfo> AtomCollection<T> {
         let atom_id = self.atom_ids.get(index).ok_or(InvalidIndex)?;
         Ok(AtomView {
             element_symbol,
-            element_id,
+            atomic_number: element_id,
             xyz,
             fractional_xyz,
             atom_id,
@@ -171,7 +171,7 @@ impl<T: ModelInfo> AtomCollection<T> {
         self.element_symbols.as_ref()
     }
 
-    pub fn atomic_nums(&self) -> &[u32] {
+    pub fn atomic_nums(&self) -> &[u8] {
         self.atomic_nums.as_ref()
     }
 
@@ -212,8 +212,12 @@ impl<T: ModelInfo> From<Vec<Atom<T>>> for AtomCollection<T> {
             size: atom_num,
             format_type: T::default(),
         };
-        for (i, atom) in src.into_iter().enumerate() {
-            output.update_atom_at(i, atom).unwrap();
+        for atom in src.into_iter() {
+            output.element_symbols.push(atom.element_symbol);
+            output.atomic_nums.push(atom.atomic_number);
+            output.xyz_coords.push(atom.xyz);
+            output.fractional_xyz.push(atom.fractional_xyz);
+            output.atom_ids.push(atom.atom_id);
         }
         output
     }
@@ -264,10 +268,10 @@ where
     T: ModelInfo,
 {
     /// Creates a new [`Atom`].
-    pub fn new(element_symbol: String, element_id: u32, xyz: Point3<f64>, atom_id: u32) -> Self {
+    pub fn new(element_symbol: String, atomic_number: u8, xyz: Point3<f64>, atom_id: u32) -> Self {
         Self {
             element_symbol,
-            element_id,
+            atomic_number,
             xyz,
             fractional_xyz: None,
             atom_id,
@@ -285,12 +289,12 @@ where
     }
 
     /// Returns the element id of this [`Atom<Format>`].
-    pub fn element_id(&self) -> u32 {
-        self.element_id
+    pub fn element_id(&self) -> u8 {
+        self.atomic_number
     }
     /// Sets the element id of this [`Atom<Format>`].
-    pub fn set_element_id(&mut self, element_id: u32) {
-        self.element_id = element_id;
+    pub fn set_element_id(&mut self, atomic_number: u8) {
+        self.atomic_number = atomic_number;
     }
 
     /// Returns a reference to the xyz of this [`Atom<Format>`].
