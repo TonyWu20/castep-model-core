@@ -4,6 +4,7 @@ use std::{cmp::Ordering, ops::Add};
 use na::Point3;
 
 mod atom_builder;
+pub mod visitor;
 
 pub use atom_builder::AtomCollectionBuilder;
 #[derive(Debug, Clone)]

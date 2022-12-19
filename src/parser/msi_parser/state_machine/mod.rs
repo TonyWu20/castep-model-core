@@ -232,7 +232,8 @@ impl<'a> MsiParser<'a, Start> {
             self.to_parse = Some(rest);
         }
         // Fields have been consumed entirely.
-        let (_, _model_end) = Self::model_end(self.to_parse.unwrap()).unwrap();
+        let (_, _model_end) =
+            Self::model_end(self.to_parse.unwrap()).expect("Error: end of model not found!");
         // Assume the file has only one model...
         self.to_parse = None;
         let Self {
@@ -349,8 +350,21 @@ mod test {
     use super::MsiParser;
 
     #[test]
-    fn parsing() {
+    fn parsing_lattice() {
         let file_content = read_to_string("SAC_GDY_V.msi").unwrap();
+        let parser = MsiParser::new(&file_content);
+        let mut parser = parser.starts().analyze();
+        println!("{:?}", parser.parse_atoms());
+        parser.model_attributes.sort_by_key(|item| {
+            let (_, key) = MsiParser::<Analyzed>::get_attribute_type(item).unwrap();
+            key
+        });
+        println!("{:?}", parser.parse_lattice_vectors());
+        println!("{:?}", parser.build_lattice_model());
+    }
+    #[test]
+    fn parsing_ads() {
+        let file_content = read_to_string("C2H4.msi").unwrap();
         let parser = MsiParser::new(&file_content);
         let mut parser = parser.starts().analyze();
         println!("{:?}", parser.parse_atoms());
