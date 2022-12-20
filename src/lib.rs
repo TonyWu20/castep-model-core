@@ -1,5 +1,6 @@
 #![allow(dead_code)]
 pub mod atom;
+pub mod bond;
 pub mod builder_typestate;
 pub mod error;
 pub mod lattice;

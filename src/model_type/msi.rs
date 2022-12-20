@@ -3,18 +3,32 @@ use std::fmt::Display;
 use na::{UnitQuaternion, Vector, Vector3};
 
 use crate::{
-    atom::Atom,
+    atom::{Atom, AtomCollection, AtomCollectionBuilder, AtomView},
+    bond::Bonds,
+    builder_typestate::No,
     lattice::{LatticeModel, LatticeVectors},
     Transformation,
 };
 
-use super::{cell::CellModel, ModelInfo};
+use super::{cell::CellModel, ModelInfo, Settings};
 
 #[derive(Debug, Clone, Default)]
 /// A unit struct to mark `msi` format
 pub struct MsiModel;
 
 impl ModelInfo for MsiModel {}
+
+#[derive(Debug, Default)]
+/// Struct representing the structure of a `msi` file.
+pub struct MsiFile {
+    cry_display: (u32, u32),
+    periodic_type: u8,
+    space_group: String,
+    lattice_vectors: LatticeVectors<MsiModel>,
+    cry_tolerance: f64,
+    atoms: AtomCollection<MsiModel>,
+    bonds: Option<Bonds<MsiModel>>,
+}
 
 /// Display trait for `Atom<MsiModel>`
 impl Display for Atom<MsiModel> {
@@ -61,6 +75,29 @@ impl Display for LatticeVectors<MsiModel> {
     }
 }
 
+impl<T> From<T> for AtomCollection<MsiModel>
+where
+    T: AsRef<AtomCollection<CellModel>>,
+{
+    fn from(src: T) -> Self {
+        let builder = AtomCollectionBuilder::<MsiModel, No>::new(src.as_ref().size());
+        builder
+            .with_element_symbols(src.as_ref().element_symbols())
+            .unwrap()
+            .with_atomic_nums(src.as_ref().atomic_nums())
+            .unwrap()
+            .with_xyz_coords(src.as_ref().xyz_coords())
+            .unwrap()
+            .with_fractional_xyz(src.as_ref().fractional_xyz())
+            .unwrap()
+            .with_atom_ids(src.as_ref().atom_ids())
+            .unwrap()
+            .finish()
+            .unwrap()
+            .build()
+    }
+}
+
 impl<T> From<T> for LatticeModel<MsiModel>
 where
     T: AsRef<LatticeModel<CellModel>>,
@@ -74,22 +111,13 @@ where
                 .vectors()
                 .to_owned(),
         );
-        // The inverse of the fractional coord matrix is the cartesian coord matrix
-        let mut msi_atoms: Vec<Atom<MsiModel>> = cell_model
-            .as_ref()
-            .atoms()
-            .iter()
-            .map(|atom| -> Atom<MsiModel> {
-                Atom::<MsiModel>::new(
-                    atom.element_symbol().to_string(),
-                    atom.element_id(),
-                    *atom.xyz(),
-                    atom.atom_id(),
-                )
-            })
-            .collect();
-        msi_atoms.sort_by_key(|a| a.atom_id());
-        let mut msi_model = Self::new(Some(new_lat_vec), msi_atoms);
+        // Convert the SoA to AoS for easier sorting.
+        let msi_atoms: AtomCollection<MsiModel> = cell_model.as_ref().atoms().into();
+        let mut msi_atom_array: Vec<Atom<MsiModel>> = msi_atoms.into();
+        msi_atom_array.sort_by_key(|a| a.atom_id());
+        // Convert AoS back to SoA.
+        let msi_atom_collection: AtomCollection<MsiModel> = msi_atom_array.into();
+        let mut msi_model = Self::new(Some(new_lat_vec), msi_atom_collection, Settings::default());
         let y_axis: Vector3<f64> = Vector::y();
         let b_vec = cell_model
             .as_ref()
@@ -109,11 +137,6 @@ where
 
 impl LatticeModel<MsiModel> {
     pub fn msi_export(&self) -> String {
-        let atoms_output: Vec<String> = self
-            .atoms()
-            .iter()
-            .map(|atom| format!("{}", atom))
-            .collect();
         if let Some(lattice_vectors) = self.lattice_vectors() {
             let headers_vectors: Vec<String> = vec![
                 "# MSI CERIUS2 DataModel File Version 4 0\n".to_string(),
@@ -127,10 +150,45 @@ impl LatticeModel<MsiModel> {
                     self.settings().cry_tolerance()
                 ),
             ];
-            format!("{}{})", headers_vectors.concat(), atoms_output.concat())
+            format!("{}{})", headers_vectors.concat(), self.atoms())
         } else {
             let headers = "# MSI CERIUS2 DataModel File Version 4 0\n(1 Model\n";
-            format!("{}{})", headers, atoms_output.concat())
+            format!("{}{})", headers, self.atoms())
         }
+    }
+}
+
+impl<'a> Display for AtomView<'a, MsiModel> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            r#"  ({item_id} Atom
+    (A C ACL "{elm_id} {elm}")
+    (A C Label "{elm}")
+    (A D XYZ ({x:.12} {y:.12} {z:.12}))
+    (A I Id {atom_id})
+  )
+"#,
+            item_id = self.atom_id() + 1,
+            elm_id = self.atomic_number(),
+            elm = self.element_symbol(),
+            x = self.xyz().x,
+            y = self.xyz().y,
+            z = self.xyz().z,
+            atom_id = self.atom_id(),
+        )
+    }
+}
+
+impl Display for AtomCollection<MsiModel> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let msi_atom_strings: Vec<String> = (0..self.size())
+            .into_iter()
+            .map(|i| {
+                let atom_view = self.view_atom_at(i).unwrap();
+                format!("{}", atom_view)
+            })
+            .collect();
+        write!(f, "{}", msi_atom_strings.concat())
     }
 }

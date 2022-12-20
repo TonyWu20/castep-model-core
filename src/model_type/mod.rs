@@ -26,12 +26,25 @@ pub struct Settings<T: ModelInfo> {
     /// The order is `Rxx`, `Rxy`, `Rxz`, `Ryy`, `Ryz`, `Rzz`
     external_pressure: [f64; 6],
     /// A parameter in `msi` format
+    cry_display: (u32, u32),
+    /// A parameter in `msi` format
     periodic_type: u8,
     /// A parameter in `msi` format
     space_group: String,
     /// A parameter in `msi` format
     cry_tolerance: f64,
     format_marker: T,
+}
+
+impl Settings<MsiModel> {
+    pub fn new_msi_settings(periodic_type: u8, space_group: &str, cry_tolerance: f64) -> Self {
+        Self {
+            periodic_type,
+            space_group: space_group.into(),
+            cry_tolerance,
+            ..Default::default()
+        }
+    }
 }
 
 impl<T: ModelInfo> Default for Settings<T> {
@@ -48,6 +61,7 @@ impl<T: ModelInfo> Default for Settings<T> {
             periodic_type: 100_u8,
             space_group: "1 1".to_string(),
             cry_tolerance: 0.05,
+            cry_display: (192, 256),
             format_marker: T::default(),
         }
     }

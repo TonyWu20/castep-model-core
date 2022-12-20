@@ -5,7 +5,7 @@ use std::{
 };
 
 use crate::{
-    atom::Atom,
+    atom::AtomCollection,
     lattice::{LatticeModel, LatticeVectors},
     param_writer::ms_aux_files::{KptAux, TrjAux},
     Transformation,
@@ -13,8 +13,9 @@ use crate::{
 
 use cpt::{data::ELEMENT_TABLE, element::LookupElement};
 use na::{UnitQuaternion, Vector, Vector3};
+use nalgebra::Point3;
 
-use super::{msi::MsiModel, ModelInfo};
+use super::{msi::MsiModel, ModelInfo, Settings};
 
 #[derive(Debug, Clone, Default)]
 /// A unit struct to mark `cell`format.
@@ -65,24 +66,20 @@ where
             .lattice_vectors()
             .unwrap()
             .fractional_coord_matrix();
-        let mut cell_atoms: Vec<Atom<CellModel>> = msi_model
-            .as_ref()
-            .atoms()
+        let mut cell_atoms: AtomCollection<CellModel> = msi_model.as_ref().atoms().clone().into();
+        let frac_coords: Vec<Point3<f64>> = cell_atoms
+            .xyz_coords()
             .iter()
-            .map(|atom| -> Atom<CellModel> {
-                let fractional_coord = fractional_coord_matrix * atom.xyz();
-                let mut new_atom = Atom::new(
-                    atom.element_symbol().to_string(),
-                    atom.element_id(),
-                    *atom.xyz(),
-                    atom.atom_id(),
-                );
-                new_atom.set_fractional_xyz(Some(fractional_coord));
-                new_atom
-            })
+            .map(|xyz| fractional_coord_matrix * xyz)
             .collect();
-        cell_atoms.sort_by_key(|a| a.element_id());
-        Self::new(Some(new_lat_vec), cell_atoms)
+        cell_atoms
+            .fractional_xyz_mut()
+            .iter_mut()
+            .enumerate()
+            .for_each(|(i, f_xyz)| {
+                *f_xyz = Some(*frac_coords.get(i).unwrap());
+            });
+        Self::new(Some(new_lat_vec), cell_atoms, Settings::default())
     }
 }
 
@@ -90,12 +87,7 @@ where
 impl LatticeModel<CellModel> {
     /// Formatted *fractional coordinates*
     fn positions_str(&self) -> String {
-        let coords_strings: Vec<String> = self
-            .atoms()
-            .iter()
-            .map(|atom| format!("{}", atom))
-            .collect();
-        let coords = coords_strings.concat();
+        let coords = format!("{}", self.atoms());
         CellModel::write_block(("POSITIONS_FRAC".to_string(), coords))
     }
     /**
@@ -311,13 +303,9 @@ impl LatticeModel<CellModel> {
     }
     pub fn spin_total(&self) -> u8 {
         self.atoms()
+            .element_symbols()
             .iter()
-            .map(|atom| -> u8 {
-                ELEMENT_TABLE
-                    .get_by_symbol(atom.element_symbol())
-                    .unwrap()
-                    .spin
-            })
+            .map(|symbol| -> u8 { ELEMENT_TABLE.get_by_symbol(symbol).unwrap().spin })
             .reduce(|total, next| total + next)
             .unwrap()
     }
@@ -332,35 +320,33 @@ impl LatticeModel<CellModel> {
     }
     /// Build `TrjAux` struct
     pub fn build_trjaux(&self) -> TrjAux {
-        let atom_ids: Vec<u32> = self.atoms().iter().map(|atom| atom.atom_id()).collect();
+        let atom_ids: Vec<u32> = self.atoms().atom_ids().to_vec();
         TrjAux::new(atom_ids)
     }
 }
 
-impl Display for Atom<CellModel> {
+impl Display for AtomCollection<CellModel> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let atom_element = self.element_symbol();
-        let spin = ELEMENT_TABLE.get_by_symbol(atom_element).unwrap().spin();
-        if spin > 0 {
-            writeln!(
-                f,
-                "{:>3}{:20.16}{:20.16}{:20.16} SPIN={:14.10}",
-                atom_element,
-                self.fractional_xyz().unwrap().x,
-                self.fractional_xyz().unwrap().y,
-                self.fractional_xyz().unwrap().z,
-                spin as f64
-            )
-        } else {
-            writeln!(
-                f,
-                "{:>3}{:20.16}{:20.16}{:20.16}",
-                atom_element,
-                self.fractional_xyz().unwrap().x,
-                self.fractional_xyz().unwrap().y,
-                self.fractional_xyz().unwrap().z,
-            )
-        }
+        let all_positions_str: Vec<String> = self
+            .element_symbols()
+            .iter()
+            .zip(self.fractional_xyz().iter())
+            .map(|(symbol, frac_xyz)| -> String {
+                let spin = ELEMENT_TABLE.get_by_symbol(symbol).unwrap().spin();
+                let spin_str = if spin > 0 {
+                    format!(" SPIN={:14.10}", spin)
+                } else {
+                    "".into()
+                };
+                let frac_xyz = frac_xyz.unwrap();
+                format!(
+                    "{:>3}{:20.16}{:20.16}{:20.16}{spin_str}",
+                    symbol, frac_xyz.x, frac_xyz.y, frac_xyz.z
+                )
+            })
+            .collect();
+        let joined_positions_str = all_positions_str.join("\n");
+        write!(f, "{}", joined_positions_str)
     }
 }
 

@@ -3,7 +3,7 @@ use std::{collections::HashSet, ops::Add};
 use na::{Matrix3, Vector3};
 
 use crate::{
-    atom::Atom,
+    atom::{AtomCollection, AtomView},
     error::InvalidIndex,
     model_type::{ModelInfo, Settings},
     Transformation,
@@ -12,7 +12,7 @@ use crate::{
 #[derive(Debug, Clone)]
 pub struct LatticeModel<T: ModelInfo> {
     lattice_vectors: Option<LatticeVectors<T>>,
-    atoms: Vec<Atom<T>>,
+    atoms: AtomCollection<T>,
     settings: Settings<T>,
 }
 
@@ -20,11 +20,15 @@ impl<T> LatticeModel<T>
 where
     T: ModelInfo,
 {
-    pub fn new(lattice_vectors: Option<LatticeVectors<T>>, atoms: Vec<Atom<T>>) -> Self {
+    pub fn new(
+        lattice_vectors: Option<LatticeVectors<T>>,
+        atoms: AtomCollection<T>,
+        settings: Settings<T>,
+    ) -> Self {
         Self {
             lattice_vectors,
             atoms,
-            settings: Settings::default(),
+            settings,
         }
     }
 
@@ -32,39 +36,41 @@ where
     pub fn lattice_vectors(&self) -> Option<&LatticeVectors<T>> {
         self.lattice_vectors.as_ref()
     }
-    pub fn atoms(&self) -> &[Atom<T>] {
-        self.atoms.as_ref()
+    pub fn atoms(&self) -> &AtomCollection<T> {
+        &self.atoms
     }
 
-    pub fn atoms_mut(&mut self) -> &mut Vec<Atom<T>> {
+    pub fn atoms_mut(&mut self) -> &mut AtomCollection<T> {
         &mut self.atoms
     }
-    pub fn get_atom_by_id(&self, atom_id: u32) -> Result<&Atom<T>, InvalidIndex> {
-        self.atoms().get(atom_id as usize - 1).ok_or(InvalidIndex)
+    pub fn view_atom_by_id(&self, atom_id: u32) -> Result<AtomView<T>, InvalidIndex> {
+        self.atoms().view_atom_at((atom_id - 1) as usize)
     }
-    pub fn get_mut_atom_by_id(&mut self, atom_id: u32) -> Result<&mut Atom<T>, InvalidIndex> {
-        self.atoms_mut()
-            .get_mut(atom_id as usize - 1)
-            .ok_or(InvalidIndex)
-    }
+    // pub fn get_mut_atom_by_id(&mut self, atom_id: u32) -> Result<&mut Atom<T>, InvalidIndex> {
+    //     self.atoms_mut()
+    //         .get_mut(atom_id as usize - 1)
+    //         .ok_or(InvalidIndex)
+    // }
     pub fn get_vector_ab(&self, a_id: u32, b_id: u32) -> Result<Vector3<f64>, InvalidIndex> {
         if a_id != b_id {
-            let atom_a_xyz = self.get_atom_by_id(a_id)?.xyz();
-            let atom_b_xyz = self.get_atom_by_id(b_id)?.xyz();
+            let atom_a_xyz = self.view_atom_by_id(a_id)?.xyz().to_owned();
+            let atom_b_xyz = self.view_atom_by_id(b_id)?.xyz().to_owned();
             Ok(atom_b_xyz - atom_a_xyz)
         } else {
             Err(InvalidIndex)
         }
     }
     pub fn list_element(&self) -> Vec<String> {
-        let mut elm_list: Vec<(String, u32)> = vec![];
+        let mut elm_list: Vec<(String, u8)> = vec![];
         elm_list.extend(
             self.atoms()
+                .element_symbols()
                 .iter()
-                .map(|atom| (atom.element_symbol().to_string(), atom.element_id()))
-                .collect::<Vec<(String, u32)>>()
+                .zip(self.atoms.atomic_nums().iter())
+                .map(|(sym, id)| (sym.to_string(), *id))
+                .collect::<Vec<(String, u8)>>()
                 .drain(..)
-                .collect::<HashSet<(String, u32)>>()
+                .collect::<HashSet<(String, u8)>>()
                 .into_iter(),
         );
         elm_list.sort_unstable_by(|a, b| {
@@ -99,7 +105,7 @@ impl<T: ModelInfo> AsMut<LatticeModel<T>> for LatticeModel<T> {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Default)]
 pub struct LatticeVectors<T: ModelInfo> {
     vectors: Matrix3<f64>,
     model_type: T,
@@ -170,18 +176,14 @@ where
     T: ModelInfo,
 {
     fn rotate(&mut self, rotate_quatd: &na::UnitQuaternion<f64>) {
-        self.atoms_mut()
-            .iter_mut()
-            .for_each(|atom| atom.rotate(rotate_quatd));
+        self.atoms_mut().rotate(rotate_quatd);
         if let Some(lattice_vectors) = self.lattice_vectors_mut() {
             lattice_vectors.rotate(rotate_quatd);
         }
     }
 
     fn translate(&mut self, translate_matrix: &na::Translation<f64, 3>) {
-        self.atoms_mut()
-            .iter_mut()
-            .for_each(|atom| atom.translate(translate_matrix));
+        self.atoms_mut().translate(translate_matrix);
     }
 }
 
@@ -193,14 +195,8 @@ where
 {
     type Output = LatticeModel<T>;
 
-    fn add(mut self, rhs: Self) -> Self::Output {
-        let last_number_id = self.atoms().len() as u32;
-        let mut rhs = rhs;
-        rhs.atoms_mut().iter_mut().for_each(|atom| {
-            atom.set_atom_id(atom.atom_id() + last_number_id);
-            self.atoms_mut().push(atom.to_owned());
-        });
-        let new_atoms = self.atoms().to_vec();
+    fn add(self, rhs: Self) -> Self::Output {
+        let new_atoms = self.atoms + rhs.atoms;
         let Self {
             lattice_vectors,
             atoms: _,
