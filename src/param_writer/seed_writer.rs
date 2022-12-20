@@ -9,9 +9,10 @@ use std::{
 use cpt::{data::ELEMENT_TABLE, element::LookupElement};
 
 use crate::{
+    atom::visitor::VisitCollection,
     builder_typestate::{No, ToAssign, Yes},
     lattice::LatticeModel,
-    model_type::{cell::CellModel, msi::MsiModel},
+    model_type::{cell::CellModel, msi::MsiModel, BandStructureExport, DefaultExport},
 };
 
 use super::{
@@ -46,7 +47,7 @@ where
     pub fn create_export_dir(&self) -> Result<PathBuf, io::Error> {
         let dir_name = format!("{}_{}", self.seed_name, "opt");
         let dir_loc: OsString = self.export_loc.clone().into();
-        let export_loc = PathBuf::from(dir_loc).join(&dir_name);
+        let export_loc = PathBuf::from(dir_loc).join(dir_name);
         create_dir_all(&export_loc)?;
         Ok(export_loc)
     }
@@ -62,7 +63,7 @@ where
     /// take up much disk space.
     /// You can control this behaviour with `[cfg(not(debug_assertions))]`
     pub fn copy_potentials(&self) -> Result<(), io::Error> {
-        let element_list = self.cell.list_element();
+        let element_list = self.cell.element_set();
         element_list
             .iter()
             .try_for_each(|elm| -> Result<(), io::Error> {
@@ -181,10 +182,10 @@ impl<'a> SeedWriter<'a, GeomOptParam> {
         let param_path = self.path_builder(".param")?;
         fs::write(param_path, format!("{}", self.param))?;
         let cell_path = self.path_builder(".cell")?;
-        fs::write(cell_path, self.cell.cell_export())?;
+        fs::write(cell_path, DefaultExport::export(&self.cell))?;
         let msi_path = self.path_builder(".msi")?;
         let msi_model: LatticeModel<MsiModel> = self.cell.into();
-        fs::write(msi_path, msi_model.msi_export())?;
+        fs::write(msi_path, msi_model.export())?;
         self.write_lsf_script()?;
         self.write_hpc_sh_script()?;
         Ok(())
@@ -203,7 +204,7 @@ impl<'a> SeedWriter<'a, BandStructureParam> {
         let param_path = self.path_builder("_DOS.param")?;
         fs::write(param_path, format!("{}", self.param))?;
         let cell_path = self.path_builder("_DOS.cell")?;
-        fs::write(cell_path, self.cell.bs_cell_export())?;
+        fs::write(cell_path, BandStructureExport::export(&self.cell))?;
         Ok(())
     }
 }

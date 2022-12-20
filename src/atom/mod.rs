@@ -7,6 +7,8 @@ mod atom_builder;
 pub mod visitor;
 
 pub use atom_builder::AtomCollectionBuilder;
+
+use self::visitor::VisitCollection;
 #[derive(Debug, Clone)]
 /// Struct that defines an atom.
 pub struct Atom<T: ModelInfo> {
@@ -148,25 +150,6 @@ impl<T: ModelInfo> AtomCollection<T> {
         self.update_atom_id_at(index, atom_id)?;
         Ok(())
     }
-    pub fn view_atom_at(&self, index: usize) -> Result<AtomView<T>, InvalidIndex> {
-        let element_symbol = self
-            .element_symbols
-            .get(index)
-            .ok_or(InvalidIndex)?
-            .as_str();
-        let element_id = self.atomic_nums.get(index).ok_or(InvalidIndex)?;
-        let xyz = self.xyz_coords.get(index).ok_or(InvalidIndex)?;
-        let fractional_xyz = self.fractional_xyz.get(index).ok_or(InvalidIndex)?.as_ref();
-        let atom_id = self.atom_ids.get(index).ok_or(InvalidIndex)?;
-        Ok(AtomView {
-            element_symbol,
-            atomic_number: element_id,
-            xyz,
-            fractional_xyz,
-            atom_id,
-            format_type: T::default(),
-        })
-    }
 
     pub fn element_symbols(&self) -> &[String] {
         self.element_symbols.as_ref()
@@ -228,7 +211,7 @@ impl<'a, T: ModelInfo> From<&'a AtomCollection<T>> for Vec<AtomView<'a, T>> {
     fn from(src: &'a AtomCollection<T>) -> Self {
         (0..src.size)
             .into_iter()
-            .map(|i| src.view_atom_at(i).unwrap())
+            .map(|i| src.view_atom_at_index(i).unwrap())
             .collect()
     }
 }
@@ -238,7 +221,7 @@ impl<T: ModelInfo> From<AtomCollection<T>> for Vec<Atom<T>> {
         (0..src.size)
             .into_iter()
             .map(|i| -> Atom<T> {
-                let view = src.view_atom_at(i).unwrap();
+                let view = src.view_atom_at_index(i).unwrap();
                 view.into()
             })
             .collect()

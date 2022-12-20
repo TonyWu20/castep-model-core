@@ -3,14 +3,14 @@ use std::fmt::Display;
 use na::{UnitQuaternion, Vector, Vector3};
 
 use crate::{
-    atom::{Atom, AtomCollection, AtomCollectionBuilder, AtomView},
+    atom::{visitor::VisitCollection, Atom, AtomCollection, AtomCollectionBuilder, AtomView},
     bond::Bonds,
     builder_typestate::No,
     lattice::{LatticeModel, LatticeVectors},
     Transformation,
 };
 
-use super::{cell::CellModel, ModelInfo, Settings};
+use super::{cell::CellModel, DefaultExport, ModelInfo, Settings};
 
 #[derive(Debug, Clone, Default)]
 /// A unit struct to mark `msi` format
@@ -135,25 +135,34 @@ where
     }
 }
 
-impl LatticeModel<MsiModel> {
-    pub fn msi_export(&self) -> String {
-        if let Some(lattice_vectors) = self.lattice_vectors() {
+impl<T> DefaultExport<MsiModel> for T
+where
+    T: AsRef<LatticeModel<MsiModel>>,
+{
+    fn export(&self) -> String {
+        if let Some(lattice_vectors) = self.as_ref().lattice_vectors() {
             let headers_vectors: Vec<String> = vec![
                 "# MSI CERIUS2 DataModel File Version 4 0\n".to_string(),
                 "(1 Model\n".to_string(),
                 "  (A I CRY/DISPLAY (192 256))\n".to_string(),
-                format!("  (A I PeriodicType {})\n", self.settings().periodic_type()),
-                format!("  (A C SpaceGroup \"{}\")\n", self.settings().space_group()),
+                format!(
+                    "  (A I PeriodicType {})\n",
+                    self.as_ref().settings().periodic_type()
+                ),
+                format!(
+                    "  (A C SpaceGroup \"{}\")\n",
+                    self.as_ref().settings().space_group()
+                ),
                 format!("{}", lattice_vectors),
                 format!(
                     "  (A D CRY/TOLERANCE {})\n",
-                    self.settings().cry_tolerance()
+                    self.as_ref().settings().cry_tolerance()
                 ),
             ];
-            format!("{}{})", headers_vectors.concat(), self.atoms())
+            format!("{}{})", headers_vectors.concat(), self.as_ref().atoms())
         } else {
             let headers = "# MSI CERIUS2 DataModel File Version 4 0\n(1 Model\n";
-            format!("{}{})", headers, self.atoms())
+            format!("{}{})", headers, self.as_ref().atoms())
         }
     }
 }
@@ -185,7 +194,7 @@ impl Display for AtomCollection<MsiModel> {
         let msi_atom_strings: Vec<String> = (0..self.size())
             .into_iter()
             .map(|i| {
-                let atom_view = self.view_atom_at(i).unwrap();
+                let atom_view = self.view_atom_at_index(i).unwrap();
                 format!("{}", atom_view)
             })
             .collect();
