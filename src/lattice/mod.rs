@@ -1,10 +1,9 @@
-use std::{collections::HashSet, ops::Add};
+use std::ops::Add;
 
-use na::{Matrix3, Vector3};
+use na::Matrix3;
 
 use crate::{
-    atom::{AtomCollection, AtomView},
-    error::InvalidIndex,
+    atom::AtomCollection,
     model_type::{ModelInfo, Settings},
     Transformation,
 };
@@ -42,46 +41,6 @@ where
 
     pub fn atoms_mut(&mut self) -> &mut AtomCollection<T> {
         &mut self.atoms
-    }
-    pub fn view_atom_by_id(&self, atom_id: u32) -> Result<AtomView<T>, InvalidIndex> {
-        self.atoms().view_atom_at((atom_id - 1) as usize)
-    }
-    // pub fn get_mut_atom_by_id(&mut self, atom_id: u32) -> Result<&mut Atom<T>, InvalidIndex> {
-    //     self.atoms_mut()
-    //         .get_mut(atom_id as usize - 1)
-    //         .ok_or(InvalidIndex)
-    // }
-    pub fn get_vector_ab(&self, a_id: u32, b_id: u32) -> Result<Vector3<f64>, InvalidIndex> {
-        if a_id != b_id {
-            let atom_a_xyz = self.view_atom_by_id(a_id)?.xyz().to_owned();
-            let atom_b_xyz = self.view_atom_by_id(b_id)?.xyz().to_owned();
-            Ok(atom_b_xyz - atom_a_xyz)
-        } else {
-            Err(InvalidIndex)
-        }
-    }
-    pub fn list_element(&self) -> Vec<String> {
-        let mut elm_list: Vec<(String, u8)> = vec![];
-        elm_list.extend(
-            self.atoms()
-                .element_symbols()
-                .iter()
-                .zip(self.atoms.atomic_nums().iter())
-                .map(|(sym, id)| (sym.to_string(), *id))
-                .collect::<Vec<(String, u8)>>()
-                .drain(..)
-                .collect::<HashSet<(String, u8)>>()
-                .into_iter(),
-        );
-        elm_list.sort_unstable_by(|a, b| {
-            let (_, id_a) = a;
-            let (_, id_b) = b;
-            id_a.cmp(id_b)
-        });
-        elm_list
-            .iter()
-            .map(|(name, _)| name.to_string())
-            .collect::<Vec<String>>()
     }
 
     pub fn lattice_vectors_mut(&mut self) -> &mut Option<LatticeVectors<T>> {

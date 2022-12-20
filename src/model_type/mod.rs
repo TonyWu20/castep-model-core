@@ -116,3 +116,11 @@ impl Settings<MsiModel> {
         self.cry_tolerance
     }
 }
+
+pub trait DefaultExport<T: ModelInfo> {
+    fn export(&self) -> String;
+}
+
+pub trait BandStructureExport<T: ModelInfo> {
+    fn export(&self) -> String;
+}

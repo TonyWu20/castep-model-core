@@ -1,11 +1,7 @@
-use std::{
-    fmt::Display,
-    fs::File,
-    io::{self, BufRead, BufReader},
-};
+use std::fmt::Display;
 
 use crate::{
-    atom::AtomCollection,
+    atom::{visitor::VisitCollection, AtomCollection},
     lattice::{LatticeModel, LatticeVectors},
     param_writer::ms_aux_files::{KptAux, TrjAux},
     Transformation,
@@ -15,7 +11,7 @@ use cpt::{data::ELEMENT_TABLE, element::LookupElement};
 use na::{UnitQuaternion, Vector, Vector3};
 use nalgebra::Point3;
 
-use super::{msi::MsiModel, ModelInfo, Settings};
+use super::{msi::MsiModel, BandStructureExport, DefaultExport, ModelInfo, Settings};
 
 #[derive(Debug, Clone, Default)]
 /// A unit struct to mark `cell`format.
@@ -177,7 +173,7 @@ impl LatticeModel<CellModel> {
     ```
     */
     fn species_mass(&self) -> String {
-        let element_list = self.list_element();
+        let element_list = self.element_set();
         let mass_strings: Vec<String> = element_list
             .iter()
             .map(|elm| -> String {
@@ -200,7 +196,7 @@ impl LatticeModel<CellModel> {
     ```
     */
     fn species_pot_str(&self) -> String {
-        let element_list = self.list_element();
+        let element_list = self.element_set();
         let pot_strings: Vec<String> = element_list
             .iter()
             .map(|elm| {
@@ -223,7 +219,7 @@ impl LatticeModel<CellModel> {
     ```
     */
     fn species_lcao_str(&self) -> String {
-        let element_list = self.list_element();
+        let element_list = self.element_set();
         let lcao_strings: Vec<String> = element_list
             .iter()
             .map(|elm| {
@@ -232,82 +228,6 @@ impl LatticeModel<CellModel> {
             })
             .collect();
         CellModel::write_block(("SPECIES_LCAO_STATES".to_string(), lcao_strings.concat()))
-    }
-    /// Export to ".cell" for geometry optimization task.
-    pub fn cell_export(&self) -> String {
-        let lattice_vector_string = format!("{}", self.lattice_vectors().unwrap());
-        let cell_text = vec![
-            lattice_vector_string,
-            self.positions_str(),
-            self.kpoints_list_str(),
-            self.misc_options(),
-            self.species_mass(),
-            self.species_pot_str(),
-            self.species_lcao_str(),
-        ];
-        cell_text.concat()
-    }
-    /// Export to "_DOS.cell" for band structure calculation task.
-    pub fn bs_cell_export(&self) -> String {
-        let lattice_vector_string = format!("{}", self.lattice_vectors().unwrap());
-        let cell_text = vec![
-            lattice_vector_string,
-            self.positions_str(),
-            self.bs_kpoints_list_str(),
-            self.kpoints_list_str(),
-            self.misc_options(),
-            self.species_mass(),
-            self.species_pot_str(),
-            self.species_lcao_str(),
-        ];
-        cell_text.concat()
-    }
-    pub fn get_final_cutoff_energy(&self, potentials_loc: &str) -> Result<f64, io::Error> {
-        let mut energy: f64 = 0.0;
-        self.list_element()
-            .iter()
-            .try_for_each(|elm| -> Result<(), io::Error> {
-                let potential_file = ELEMENT_TABLE.get_by_symbol(elm).unwrap().potential();
-                let potential_path = format!("{potentials_loc}/{potential_file}");
-                if let Ok(file) = File::open(&potential_path) {
-                    let file = BufReader::new(file);
-                    let fine_energy: u32 = file
-                        .lines()
-                        .find(|line| line.as_ref().unwrap().contains("FINE"))
-                        .map(|line| {
-                            let num_str = line.as_ref().unwrap().split_whitespace().next().unwrap();
-                            num_str.parse::<u32>().unwrap()
-                        })
-                        .unwrap();
-                    let round_bigger_tenth = |num: u32| -> f64 {
-                        match num % 10 {
-                            0 => num as f64,
-                            _ => ((num / 10 + 1) * 10) as f64,
-                        }
-                    };
-                    let ultra_fine_energy = round_bigger_tenth((fine_energy as f64 * 1.1) as u32);
-                    energy = if energy > ultra_fine_energy {
-                        energy
-                    } else {
-                        ultra_fine_energy
-                    };
-                    Ok(())
-                } else {
-                    panic!(
-                        "Error while reading potential file for element: {}, {}",
-                        elm, potential_path
-                    )
-                }
-            })?;
-        Ok(energy)
-    }
-    pub fn spin_total(&self) -> u8 {
-        self.atoms()
-            .element_symbols()
-            .iter()
-            .map(|symbol| -> u8 { ELEMENT_TABLE.get_by_symbol(symbol).unwrap().spin })
-            .reduce(|total, next| total + next)
-            .unwrap()
     }
     /// Build `KptAux` struct
     pub fn build_kptaux(&self) -> KptAux {
@@ -320,8 +240,7 @@ impl LatticeModel<CellModel> {
     }
     /// Build `TrjAux` struct
     pub fn build_trjaux(&self) -> TrjAux {
-        let atom_ids: Vec<u32> = self.atoms().atom_ids().to_vec();
-        TrjAux::new(atom_ids)
+        TrjAux::new(self.atoms().atom_ids().to_vec())
     }
 }
 
@@ -360,5 +279,44 @@ impl Display for LatticeVectors<CellModel> {
         let formatted_vector = formatted_vector.concat();
         let output = CellModel::write_block(("LATTICE_CART".to_string(), formatted_vector));
         write!(f, "{}", &output)
+    }
+}
+
+impl<T> DefaultExport<CellModel> for T
+where
+    T: AsRef<LatticeModel<CellModel>>,
+{
+    fn export(&self) -> String {
+        let lattice_vector_string = format!("{}", self.as_ref().lattice_vectors().unwrap());
+        let cell_text = vec![
+            lattice_vector_string,
+            self.as_ref().positions_str(),
+            self.as_ref().kpoints_list_str(),
+            self.as_ref().misc_options(),
+            self.as_ref().species_mass(),
+            self.as_ref().species_pot_str(),
+            self.as_ref().species_lcao_str(),
+        ];
+        cell_text.concat()
+    }
+}
+
+impl<T> BandStructureExport<CellModel> for T
+where
+    T: AsRef<LatticeModel<CellModel>>,
+{
+    fn export(&self) -> String {
+        let lattice_vector_string = format!("{}", self.as_ref().lattice_vectors().unwrap());
+        let cell_text = vec![
+            lattice_vector_string,
+            self.as_ref().positions_str(),
+            self.as_ref().bs_kpoints_list_str(),
+            self.as_ref().kpoints_list_str(),
+            self.as_ref().misc_options(),
+            self.as_ref().species_mass(),
+            self.as_ref().species_pot_str(),
+            self.as_ref().species_lcao_str(),
+        ];
+        cell_text.concat()
     }
 }

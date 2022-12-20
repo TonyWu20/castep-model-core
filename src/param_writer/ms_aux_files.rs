@@ -30,7 +30,7 @@ impl<P: MyFilePath> MsAuxWriter<P> {
     fn path_builder(&self, extension: &str) -> Result<PathBuf, io::Error> {
         let dir_name = format!("{}_{}", self.filestem, self.task);
         let dir_loc: OsString = self.export_loc.clone().into();
-        let export_loc = PathBuf::from(dir_loc).join(&dir_name);
+        let export_loc = PathBuf::from(dir_loc).join(dir_name);
         create_dir_all(&export_loc)?;
         let filename = format!("{}{}", self.filestem, extension);
         Ok(export_loc.join(filename))
