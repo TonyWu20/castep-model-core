@@ -5,6 +5,7 @@ use std::{
 };
 
 pub mod castep_param;
+pub mod kpoints;
 pub mod ms_aux_files;
 pub mod seed_writer;
 
