@@ -1,6 +1,6 @@
 [package]
 name = "castep-model-core"
-description = "The core module to parse, read, edit, and write 3D lattice models for castep and compatible with Materials Studio."
+description = "The core module defining the flow and structs of data in computational chemistry routines."
 readme = "README.md"
 homepage = "https://github.com/TonyWu20/castep-model-core"
 repository = "https://github.com/TonyWu20/castep-model-core"
@@ -18,9 +18,10 @@ keywords = [
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
-[dependencies]
-nalgebra = {version="0.*", features=["debug", "compare", "rand","macros", "alloc", "arbitrary"]}
-castep-periodic-table = "0.1.*"
-nom = "7"
-rayon = "1.*"
-glob = "0"
+[workspace]
+
+members = [
+    "chemrust-core",
+    "chemrust-parser",
+    "chemrust-formats"
+]
