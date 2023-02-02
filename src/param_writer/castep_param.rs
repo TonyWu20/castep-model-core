@@ -41,13 +41,7 @@ pub struct CastepParam<T: Task> {
     elec_energy_tol: f64,
     max_scf_cycles: u32,
     fix_occupancy: bool,
-    metals_method: String,
-    mixing_scheme: String,
-    mix_charge_amp: f64,
-    mix_spin_amp: f64,
-    mix_charge_gmax: f64,
-    mix_spin_gmax: f64,
-    mix_history_length: u32,
+    metals_method: MetalsMethod,
     perc_extra_bands: u32,
     smearing_width: f64,
     spin_fix: u32,
@@ -59,6 +53,91 @@ pub struct CastepParam<T: Task> {
     calculate_densdiff: bool,
     pdos_calculate_weights: bool,
     extra_setting: T,
+}
+
+#[derive(Debug)]
+pub enum MetalsMethod {
+    DensityMixing(DensityMixing),
+    EDFT(EDFT),
+}
+
+impl Display for MetalsMethod {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match &self {
+            Self::DensityMixing(dm) => {
+                write!(f, "{}", dm)
+            }
+            Self::EDFT(edft) => {
+                write!(f, "{}", edft)
+            }
+        }
+    }
+}
+
+#[derive(Debug)]
+pub struct DensityMixing {
+    mixing_scheme: String,
+    mix_charge_amp: f64,
+    mix_spin_amp: f64,
+    mix_charge_gmax: f64,
+    mix_spin_gmax: f64,
+    mix_history_length: u32,
+}
+
+impl Default for DensityMixing {
+    fn default() -> Self {
+        Self {
+            mixing_scheme: "Pulay".into(),
+            mix_charge_amp: 0.5,
+            mix_spin_amp: 2.0,
+            mix_charge_gmax: 1.5,
+            mix_spin_gmax: 1.5,
+            mix_history_length: 20,
+        }
+    }
+}
+
+impl Display for DensityMixing {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let output = format!(
+            r#"metals_method : dm
+mixing_scheme : {}
+mix_charge_amp :        {:18.15}
+mix_spin_amp :        {:18.15}
+mix_charge_gmax :        {:18.15}
+mix_spin_gmax :        {:18.15}
+mix_history_length :       {}"#,
+            self.mixing_scheme,
+            self.mix_charge_amp,
+            self.mix_spin_amp,
+            self.mix_charge_gmax,
+            self.mix_spin_gmax,
+            self.mix_history_length
+        );
+        write!(f, "{}", output)
+    }
+}
+
+#[derive(Debug)]
+pub struct EDFT {
+    num_occ_cycles: u32,
+}
+
+impl Display for EDFT {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            r#"metals_method : EDFT
+num_occ_cycles : {}"#,
+            self.num_occ_cycles
+        )
+    }
+}
+
+impl Default for EDFT {
+    fn default() -> Self {
+        Self { num_occ_cycles: 6 }
+    }
 }
 
 impl<T: Task> CastepParam<T> {
@@ -192,13 +271,7 @@ where
             elec_energy_tol: 1e-5,
             max_scf_cycles: 6000,
             fix_occupancy: false,
-            metals_method: "dm".into(),
-            mixing_scheme: "Pulay".into(),
-            mix_charge_amp: 0.5,
-            mix_spin_amp: 2.0,
-            mix_charge_gmax: 1.5,
-            mix_spin_gmax: 1.5,
-            mix_history_length: 20,
+            metals_method: MetalsMethod::DensityMixing(DensityMixing::default()),
             perc_extra_bands: 72,
             smearing_width: 0.1,
             spin_fix: 6,
@@ -242,13 +315,7 @@ finite_basis_corr :        {}
 elec_energy_tol :   {:18.15e}
 max_scf_cycles :     {}
 fix_occupancy : {}
-metals_method : {}
-mixing_scheme : {}
-mix_charge_amp :        {:18.15}
-mix_spin_amp :        {:18.15}
-mix_charge_gmax :        {:18.15}
-mix_spin_gmax :        {:18.15}
-mix_history_length :       {}
+{}
 perc_extra_bands : {}
 smearing_width :        {:18.15}
 spin_fix :        {}
@@ -275,12 +342,6 @@ pdos_calculate_weights : {}
             self.max_scf_cycles,
             self.fix_occupancy,
             self.metals_method,
-            self.mixing_scheme,
-            self.mix_charge_amp,
-            self.mix_spin_amp,
-            self.mix_charge_gmax,
-            self.mix_spin_gmax,
-            self.mix_history_length,
             self.perc_extra_bands,
             self.smearing_width,
             self.spin_fix,
@@ -357,6 +418,14 @@ where
         CastepParam {
             spin: self.spin_total,
             cut_off_energy: self.cut_off_energy,
+            ..Default::default()
+        }
+    }
+    pub fn use_edft_default(&self) -> CastepParam<T> {
+        CastepParam {
+            spin: self.spin_total,
+            cut_off_energy: self.cut_off_energy,
+            metals_method: MetalsMethod::EDFT(EDFT::default()),
             ..Default::default()
         }
     }
