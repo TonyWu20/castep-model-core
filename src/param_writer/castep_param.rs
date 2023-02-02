@@ -141,8 +141,8 @@ impl Default for EDFT {
 }
 
 impl<T: Task> CastepParam<T> {
-    pub fn build() -> CastepParamBuilder<T, No, No> {
-        CastepParamBuilder::<T, No, No>::new()
+    pub fn build() -> CastepParamBuilder<T, No, No, No> {
+        CastepParamBuilder::<T, No, No, No>::new()
     }
 }
 
@@ -360,72 +360,97 @@ pdos_calculate_weights : {}
 
 /// Builder for `CastepParam<T>`
 #[derive(Default, Debug)]
-pub struct CastepParamBuilder<T, SpinSet, CutOffSet>
+pub struct CastepParamBuilder<T, SpinSet, CutOffSet, EMSet>
 where
     T: Task,
     SpinSet: ToAssign,
     CutOffSet: ToAssign,
+    EMSet: ToAssign,
 {
     task: T,
     spin_total: u8,
     cut_off_energy: f64,
+    metals_method: Option<MetalsMethod>,
     spin_set: PhantomData<SpinSet>,
     cut_off_set: PhantomData<CutOffSet>,
+    electronic_minimizer_set: PhantomData<EMSet>,
 }
 
 /// Methods when parameters are not all ready.
-impl<T, S, C> CastepParamBuilder<T, S, C>
+impl<T, S, C, E> CastepParamBuilder<T, S, C, E>
 where
     T: Task,
     S: ToAssign,
     C: ToAssign,
+    E: ToAssign,
 {
-    pub fn new() -> CastepParamBuilder<T, No, No> {
+    pub fn new() -> CastepParamBuilder<T, No, No, E> {
         CastepParamBuilder {
             task: T::default(),
             spin_total: 0_u8,
             cut_off_energy: 0.0,
+            metals_method: None,
             spin_set: PhantomData,
             cut_off_set: PhantomData,
+            electronic_minimizer_set: PhantomData,
         }
     }
-    pub fn with_spin_total(self, spin_total: u8) -> CastepParamBuilder<T, Yes, C> {
+    pub fn with_spin_total(self, spin_total: u8) -> CastepParamBuilder<T, Yes, C, E> {
         CastepParamBuilder {
             task: self.task,
             spin_total,
             cut_off_energy: self.cut_off_energy,
+            metals_method: None,
             spin_set: PhantomData,
             cut_off_set: PhantomData,
+            electronic_minimizer_set: PhantomData,
         }
     }
-    pub fn with_cut_off_energy(self, cut_off_energy: f64) -> CastepParamBuilder<T, S, Yes> {
+    pub fn with_cut_off_energy(self, cut_off_energy: f64) -> CastepParamBuilder<T, S, Yes, E> {
         CastepParamBuilder {
             task: self.task,
             spin_total: self.spin_total,
             cut_off_energy,
+            metals_method: None,
             spin_set: PhantomData,
             cut_off_set: PhantomData,
+            electronic_minimizer_set: PhantomData,
+        }
+    }
+    pub fn set_to_edft(self) -> CastepParamBuilder<T, S, C, Yes> {
+        CastepParamBuilder {
+            task: self.task,
+            spin_total: self.spin_total,
+            cut_off_energy: self.cut_off_energy,
+            metals_method: Some(MetalsMethod::EDFT(EDFT::default())),
+            spin_set: PhantomData,
+            cut_off_set: PhantomData,
+            electronic_minimizer_set: PhantomData,
+        }
+    }
+    pub fn set_to_dm(self) -> CastepParamBuilder<T, S, C, Yes> {
+        CastepParamBuilder {
+            task: self.task,
+            spin_total: self.spin_total,
+            cut_off_energy: self.cut_off_energy,
+            metals_method: Some(MetalsMethod::DensityMixing(DensityMixing::default())),
+            spin_set: PhantomData,
+            cut_off_set: PhantomData,
+            electronic_minimizer_set: PhantomData,
         }
     }
 }
 
 /// When parameters are all settled, build `CastepParam<T>`
-impl<T> CastepParamBuilder<T, Yes, Yes>
+impl<T> CastepParamBuilder<T, Yes, Yes, Yes>
 where
     T: Task + 'static,
 {
-    pub fn build(&self) -> CastepParam<T> {
+    pub fn build(self) -> CastepParam<T> {
         CastepParam {
             spin: self.spin_total,
             cut_off_energy: self.cut_off_energy,
-            ..Default::default()
-        }
-    }
-    pub fn use_edft_default(&self) -> CastepParam<T> {
-        CastepParam {
-            spin: self.spin_total,
-            cut_off_energy: self.cut_off_energy,
-            metals_method: MetalsMethod::EDFT(EDFT::default()),
+            metals_method: self.metals_method.unwrap(),
             ..Default::default()
         }
     }
