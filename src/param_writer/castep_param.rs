@@ -151,6 +151,7 @@ impl From<CastepParam<GeomOptParam>> for CastepParam<BandStructureParam> {
         CastepParam {
             spin: geom_param.spin,
             cut_off_energy: geom_param.cut_off_energy,
+            metals_method: geom_param.metals_method,
             ..Default::default()
         }
     }
