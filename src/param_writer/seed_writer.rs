@@ -98,10 +98,11 @@ RUN="RAW"
     fn write_hpc_sh_script(&self) -> Result<(), io::Error> {
         let target_dir = self.create_export_dir()?;
         let cell_name = self.seed_name;
+        // Since 2023-05-16, nodes in hpc.sh change to 8
         let template = r#"#PBS -N HPL_short_run
 #PBS -q simple_q
 #PBS -l walltime=168:00:00
-#PBS -l nodes=1:ppn=24
+#PBS -l nodes=1:ppn=8
 #PBS -V
 
 cd $PBS_O_WORKDIR
