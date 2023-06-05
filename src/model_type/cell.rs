@@ -265,7 +265,7 @@ impl Display for AtomCollection<CellModel> {
             })
             .collect();
         let joined_positions_str = all_positions_str.join("\n");
-        write!(f, "{}", joined_positions_str)
+        write!(f, "{}\n", joined_positions_str)
     }
 }
 
