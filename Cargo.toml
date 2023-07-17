@@ -4,7 +4,7 @@ description = "The core module to parse, read, edit, and write 3D lattice models
 readme = "README.md"
 homepage = "https://github.com/TonyWu20/castep-model-core"
 repository = "https://github.com/TonyWu20/castep-model-core"
-version = "0.2.8"
+version = "0.2.9"
 edition = "2021"
 license = "MIT"
 keywords = [
@@ -20,7 +20,7 @@ keywords = [
 
 [dependencies]
 nalgebra = {version="0.*", features=["debug", "compare", "rand","macros", "alloc", "arbitrary"]}
-castep-periodic-table = "0.1.*"
+castep-periodic-table = "0.2.*"
 nom = "7"
 rayon = "1.*"
 glob = "0"
